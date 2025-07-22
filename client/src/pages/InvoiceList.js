@@ -20,6 +20,7 @@ import {
   Tooltip,
   CircularProgress,
   Alert,
+  Container,
 } from '@mui/material';
 import {
   Search,
@@ -118,34 +119,132 @@ const InvoiceList = () => {
 
   if (!isConnected) {
     return (
-      <Box textAlign="center" mt={4}>
-        <Alert severity="warning">
-          Please connect your wallet to view your invoices.
-        </Alert>
+      <Box 
+        sx={{ 
+          minHeight: '100vh',
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #475569 75%, #64748b 100%)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: `
+              radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+              radial-gradient(circle at 80% 20%, rgba(147, 197, 253, 0.1) 0%, transparent 50%)
+            `,
+            pointerEvents: 'none',
+          }
+        }}
+      >
+        <Container maxWidth="xl" sx={{ pt: 4, position: 'relative', zIndex: 1 }}>
+          <Alert 
+            severity="warning"
+            sx={{
+              background: 'linear-gradient(145deg, rgba(120, 53, 15, 0.95) 0%, rgba(146, 64, 14, 0.95) 100%)',
+              color: '#fbbf24',
+              border: '1px solid rgba(245, 158, 11, 0.3)',
+              backdropFilter: 'blur(20px)',
+            }}
+          >
+            Please connect your wallet to view your invoices.
+          </Alert>
+        </Container>
       </Box>
     );
   }
 
   return (
-    <Box>
-      <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" component="h1">
-          My Invoices
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<Refresh />}
-          onClick={handleRefresh}
-          disabled={loading}
-        >
-          Refresh
-        </Button>
-      </Box>
+    <Box 
+      sx={{ 
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 25%, #334155 50%, #475569 75%, #64748b 100%)',
+        position: 'relative',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: `
+            radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.1) 0%, transparent 50%),
+            radial-gradient(circle at 80% 20%, rgba(147, 197, 253, 0.1) 0%, transparent 50%)
+          `,
+          pointerEvents: 'none',
+        }
+      }}
+    >
+      <Container maxWidth="xl" sx={{ pt: 4, pb: 4, position: 'relative', zIndex: 1 }}>
+        <Box>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={4}>
+            <Typography 
+              variant="h3" 
+              component="h1"
+              sx={{
+                fontWeight: 700,
+                color: '#f8fafc',
+                fontSize: { xs: '2rem', md: '2.5rem' },
+                letterSpacing: '-0.025em'
+              }}
+            >
+              My Invoices
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<Refresh />}
+              onClick={handleRefresh}
+              disabled={loading}
+              sx={{
+                bgcolor: 'rgba(59, 130, 246, 0.9)',
+                backdropFilter: 'blur(20px)',
+                border: '1px solid rgba(59, 130, 246, 0.3)',
+                borderRadius: 2,
+                fontWeight: 600,
+                textTransform: 'none',
+                boxShadow: '0 10px 25px rgba(59, 130, 246, 0.25)',
+                '&:hover': {
+                  bgcolor: 'rgba(59, 130, 246, 1)',
+                  transform: 'translateY(-2px)',
+                  boxShadow: '0 15px 35px rgba(59, 130, 246, 0.35)',
+                },
+                '&:disabled': {
+                  bgcolor: 'rgba(59, 130, 246, 0.5)',
+                  color: 'rgba(255, 255, 255, 0.7)',
+                },
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              }}
+            >
+              Refresh
+            </Button>
+          </Box>
+        </Box>
 
-      {/* Filters */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Grid container spacing={2} alignItems="center">
+        {/* Filters */}
+        <Box>
+          <Card 
+            sx={{ 
+              mb: 4,
+              background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+              border: '1px solid rgba(148, 163, 184, 0.2)',
+              borderRadius: 3,
+              backdropFilter: 'blur(20px)',
+              boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '1px',
+                background: 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent)',
+              }
+            }}
+          >
+            <CardContent sx={{ p: 3 }}>
+              <Grid container spacing={3} alignItems="center">
             <Grid item xs={12} sm={6} md={4}>
               <TextField
                 fullWidth
@@ -297,6 +396,8 @@ const InvoiceList = () => {
           </CardContent>
         </Card>
       )}
+        </Box>
+      </Container>
     </Box>
   );
 };

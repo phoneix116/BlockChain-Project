@@ -21,6 +21,10 @@ export const InvoiceProvider = ({ children }) => {
   const [userInvoices, setUserInvoices] = useState([]);
   const [loading, setLoading] = useState(false);
   const [contract, setContract] = useState(null);
+  const [lastLoadTime, setLastLoadTime] = useState(0);
+
+  // Rate limiting: prevent API calls more frequent than once per 2 seconds
+  const MIN_LOAD_INTERVAL = 2000;
 
   // Load contract
   useEffect(() => {
@@ -47,15 +51,34 @@ export const InvoiceProvider = ({ children }) => {
   const loadUserInvoices = async () => {
     if (!account) return;
 
+    // Rate limiting: check if enough time has passed since last load
+    const now = Date.now();
+    if (now - lastLoadTime < MIN_LOAD_INTERVAL) {
+      console.log('Rate limited: skipping API call');
+      return;
+    }
+
     setLoading(true);
+    setLastLoadTime(now);
+    
     try {
       const response = await contractAPI.getUserInvoices(account);
       if (response.success) {
-        setUserInvoices(response.invoices);
+        setUserInvoices(response.invoices || []);
+      } else {
+        // If no invoices found, set empty array instead of showing error
+        setUserInvoices([]);
       }
     } catch (error) {
       console.error('Failed to load user invoices:', error);
-      toast.error('Failed to load invoices');
+      // Only show error for actual network/server failures, not empty results
+      if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
+        // Only show one error notification at a time
+        if (!document.querySelector('.Toastify__toast--error')) {
+          toast.error('Failed to load invoices: Network error - please check your connection');
+        }
+      }
+      setUserInvoices([]);
     } finally {
       setLoading(false);
     }
@@ -324,13 +347,24 @@ export const InvoiceProvider = ({ children }) => {
     return colorMap[status] || 'default';
   };
 
-  // Load invoices on account change
+  // Load invoices on account change (with debouncing)
   useEffect(() => {
+    let timeoutId;
+    
     if (account) {
-      loadUserInvoices();
+      // Debounce the API call to prevent rapid successive calls
+      timeoutId = setTimeout(() => {
+        loadUserInvoices();
+      }, 500);
     } else {
       setUserInvoices([]);
     }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
   }, [account]);
 
   const value = {

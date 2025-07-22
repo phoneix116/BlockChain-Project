@@ -15,9 +15,6 @@ import {
   StepLabel,
   Divider,
 } from '@mui/material';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { Upload, Receipt, Send } from '@mui/icons-material';
 import { useDropzone } from 'react-dropzone';
 import { toast } from 'react-toastify';
@@ -75,13 +72,6 @@ const CreateInvoice = () => {
     setFormData(prev => ({ ...prev, [field]: event.target.value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: null }));
-    }
-  };
-
-  const handleDateChange = (date) => {
-    setFormData(prev => ({ ...prev, dueDate: date }));
-    if (errors.dueDate) {
-      setErrors(prev => ({ ...prev, dueDate: null }));
     }
   };
 
@@ -148,8 +138,28 @@ const CreateInvoice = () => {
 
   if (!isConnected) {
     return (
-      <Box textAlign="center" mt={4}>
-        <Alert severity="warning">
+      <Box 
+        textAlign="center" 
+        mt={4}
+        sx={{
+          minHeight: '60vh',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        <Alert 
+          severity="warning"
+          sx={{
+            bgcolor: 'rgba(251, 191, 36, 0.1)',
+            border: '1px solid rgba(251, 191, 36, 0.2)',
+            color: '#fbbf24',
+            borderRadius: 2,
+            '& .MuiAlert-icon': {
+              color: '#fbbf24'
+            }
+          }}
+        >
           Please connect your wallet to create an invoice.
         </Alert>
       </Box>
@@ -170,6 +180,32 @@ const CreateInvoice = () => {
                 error={!!errors.title}
                 helperText={errors.title}
                 placeholder="e.g., Web Development Services"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: '#ef4444',
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12}>
@@ -181,6 +217,29 @@ const CreateInvoice = () => {
                 value={formData.description}
                 onChange={handleInputChange('description')}
                 placeholder="Brief description of services or products"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12}>
@@ -192,6 +251,33 @@ const CreateInvoice = () => {
                 error={!!errors.recipient}
                 helperText={errors.recipient}
                 placeholder="0x..."
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                    fontFamily: 'monospace',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: '#ef4444',
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
@@ -204,25 +290,75 @@ const CreateInvoice = () => {
                 error={!!errors.amount}
                 helperText={errors.amount}
                 inputProps={{ min: 0, step: 0.01 }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: '#ef4444',
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={6}>
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DatePicker
-                  label="Due Date"
-                  value={formData.dueDate}
-                  onChange={handleDateChange}
-                  renderInput={(params) => (
-                    <TextField
-                      {...params}
-                      fullWidth
-                      error={!!errors.dueDate}
-                      helperText={errors.dueDate}
-                    />
-                  )}
-                  minDate={new Date()}
-                />
-              </LocalizationProvider>
+              <TextField
+                label="Due Date"
+                type="date"
+                fullWidth
+                value={formData.dueDate ? formData.dueDate.toISOString().split('T')[0] : ''}
+                onChange={(e) => {
+                  const date = new Date(e.target.value);
+                  setFormData(prev => ({ ...prev, dueDate: date }));
+                  setErrors(prev => ({ ...prev, dueDate: null }));
+                }}
+                error={!!errors.dueDate}
+                helperText={errors.dueDate}
+                InputLabelProps={{ shrink: true }}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: '#ef4444',
+                  },
+                }}
+              />
             </Grid>
             <Grid item xs={12}>
               <TextField
@@ -232,6 +368,33 @@ const CreateInvoice = () => {
                 onChange={handleInputChange('tokenAddress')}
                 placeholder="Leave empty for ETH payments"
                 helperText="Enter ERC20 token address for token payments"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                    fontFamily: 'monospace',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: '#94a3b8',
+                  },
+                }}
               />
             </Grid>
           </Grid>
@@ -245,36 +408,61 @@ const CreateInvoice = () => {
               sx={{
                 p: 4,
                 border: '2px dashed',
-                borderColor: isDragActive ? 'primary.main' : 'grey.300',
-                bgcolor: isDragActive ? 'action.hover' : 'background.paper',
+                borderColor: isDragActive ? '#3b82f6' : 'rgba(148, 163, 184, 0.3)',
+                bgcolor: isDragActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.8)',
                 cursor: 'pointer',
                 textAlign: 'center',
+                borderRadius: 2,
+                transition: 'all 0.3s ease',
                 '&:hover': {
-                  bgcolor: 'action.hover',
+                  bgcolor: 'rgba(59, 130, 246, 0.05)',
+                  borderColor: 'rgba(59, 130, 246, 0.5)',
                 },
               }}
             >
               <input {...getInputProps()} />
-              <Upload sx={{ fontSize: 48, color: 'text.secondary', mb: 2 }} />
-              <Typography variant="h6" gutterBottom>
+              <Upload sx={{ fontSize: 48, color: '#94a3b8', mb: 2 }} />
+              <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
                 {isDragActive ? 'Drop the PDF here' : 'Upload Invoice PDF'}
               </Typography>
-              <Typography variant="body2" color="text.secondary">
+              <Typography variant="body2" sx={{ color: '#94a3b8' }}>
                 Drag & drop a PDF file here, or click to select
               </Typography>
-              <Typography variant="caption" display="block" mt={1}>
+              <Typography variant="caption" display="block" mt={1} sx={{ color: '#64748b' }}>
                 Maximum file size: 10MB
               </Typography>
             </Paper>
 
             {formData.file && (
-              <Alert severity="success" sx={{ mt: 2 }}>
+              <Alert 
+                severity="success" 
+                sx={{ 
+                  mt: 2,
+                  bgcolor: 'rgba(34, 197, 94, 0.1)',
+                  border: '1px solid rgba(34, 197, 94, 0.2)',
+                  color: '#22c55e',
+                  '& .MuiAlert-icon': {
+                    color: '#22c55e'
+                  }
+                }}
+              >
                 File selected: {formData.file.name} ({(formData.file.size / 1024 / 1024).toFixed(2)} MB)
               </Alert>
             )}
 
             {errors.file && (
-              <Alert severity="error" sx={{ mt: 2 }}>
+              <Alert 
+                severity="error" 
+                sx={{ 
+                  mt: 2,
+                  bgcolor: 'rgba(239, 68, 68, 0.1)',
+                  border: '1px solid rgba(239, 68, 68, 0.2)',
+                  color: '#ef4444',
+                  '& .MuiAlert-icon': {
+                    color: '#ef4444'
+                  }
+                }}
+              >
                 {errors.file}
               </Alert>
             )}
@@ -284,53 +472,111 @@ const CreateInvoice = () => {
       case 2:
         return (
           <Box>
-            <Typography variant="h6" gutterBottom>
+            <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600, mb: 3 }}>
               Review Invoice Details
             </Typography>
-            <Grid container spacing={2}>
+            <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Title
-                </Typography>
-                <Typography variant="body1">{formData.title}</Typography>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Title
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#f8fafc', fontWeight: 500 }}>
+                    {formData.title}
+                  </Typography>
+                </Box>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Amount
-                </Typography>
-                <Typography variant="body1">{formData.amount} ETH</Typography>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Amount
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#22c55e', fontWeight: 600, fontSize: '1.1rem' }}>
+                    {formData.amount} ETH
+                  </Typography>
+                </Box>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Recipient
-                </Typography>
-                <Typography variant="body1" sx={{ wordBreak: 'break-all' }}>
-                  {formData.recipient}
-                </Typography>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Recipient
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#f8fafc', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                    {formData.recipient}
+                  </Typography>
+                </Box>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Due Date
-                </Typography>
-                <Typography variant="body1">
-                  {formData.dueDate.toLocaleDateString()}
-                </Typography>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Due Date
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#f8fafc', fontWeight: 500 }}>
+                    {formData.dueDate.toLocaleDateString()}
+                  </Typography>
+                </Box>
               </Grid>
               <Grid item xs={12}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  Description
-                </Typography>
-                <Typography variant="body1">
-                  {formData.description || 'No description provided'}
-                </Typography>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Description
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#f8fafc' }}>
+                    {formData.description || 'No description provided'}
+                  </Typography>
+                </Box>
               </Grid>
               <Grid item xs={12}>
-                <Typography variant="subtitle2" color="text.secondary">
-                  PDF File
-                </Typography>
-                <Typography variant="body1">
-                  {formData.file?.name} ({(formData.file?.size / 1024 / 1024).toFixed(2)} MB)
-                </Typography>
+                <Box 
+                  sx={{ 
+                    p: 2, 
+                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
+                    borderRadius: 2,
+                    border: '1px solid rgba(148, 163, 184, 0.2)'
+                  }}
+                >
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    PDF File
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#3b82f6', fontWeight: 500 }}>
+                    {formData.file?.name} ({(formData.file?.size / 1024 / 1024).toFixed(2)} MB)
+                  </Typography>
+                </Box>
               </Grid>
             </Grid>
           </Box>
@@ -342,14 +588,77 @@ const CreateInvoice = () => {
   };
 
   return (
-    <Box>
-      <Typography variant="h4" component="h1" gutterBottom>
+    <Box 
+      sx={{
+        minHeight: '100vh',
+        background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+        p: 3
+      }}
+    >
+      <Typography 
+        variant="h4" 
+        component="h1" 
+        gutterBottom
+        sx={{ 
+          color: '#f8fafc', 
+          fontWeight: 700,
+          mb: 4,
+          textAlign: 'center',
+          background: 'linear-gradient(90deg, #f8fafc 0%, #60a5fa 50%, #f8fafc 100%)',
+          backgroundClip: 'text',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent'
+        }}
+      >
         Create New Invoice
       </Typography>
 
-      <Card>
-        <CardContent>
-          <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
+      <Card 
+        sx={{
+          maxWidth: 800,
+          mx: 'auto',
+          background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          borderRadius: 3,
+          border: '1px solid rgba(148, 163, 184, 0.2)',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+          backdropFilter: 'blur(20px)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '2px',
+            background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
+          }
+        }}
+      >
+        <CardContent sx={{ p: 4 }}>
+          <Stepper 
+            activeStep={activeStep} 
+            sx={{ 
+              mb: 4,
+              '& .MuiStepLabel-label': {
+                color: '#94a3b8',
+                '&.Mui-active': {
+                  color: '#3b82f6'
+                },
+                '&.Mui-completed': {
+                  color: '#22c55e'
+                }
+              },
+              '& .MuiStepIcon-root': {
+                color: 'rgba(148, 163, 184, 0.5)',
+                '&.Mui-active': {
+                  color: '#3b82f6'
+                },
+                '&.Mui-completed': {
+                  color: '#22c55e'
+                }
+              }
+            }}
+          >
             {steps.map((label) => (
               <Step key={label}>
                 <StepLabel>{label}</StepLabel>
@@ -359,12 +668,21 @@ const CreateInvoice = () => {
 
           {renderStepContent(activeStep)}
 
-          <Divider sx={{ my: 3 }} />
+          <Divider sx={{ my: 3, borderColor: 'rgba(148, 163, 184, 0.2)' }} />
 
           <Box display="flex" justifyContent="space-between">
             <Button
               disabled={activeStep === 0}
               onClick={handleBack}
+              sx={{
+                color: '#94a3b8',
+                '&:hover': {
+                  bgcolor: 'rgba(148, 163, 184, 0.1)'
+                },
+                '&:disabled': {
+                  color: 'rgba(148, 163, 184, 0.3)'
+                }
+              }}
             >
               Back
             </Button>
@@ -375,6 +693,12 @@ const CreateInvoice = () => {
                 onClick={handleSubmit}
                 disabled={loading}
                 startIcon={loading ? <CircularProgress size={20} /> : <Send />}
+                sx={{
+                  bgcolor: 'rgba(59, 130, 246, 0.9)',
+                  '&:hover': { bgcolor: '#3b82f6' },
+                  fontWeight: 600,
+                  textTransform: 'none'
+                }}
               >
                 {loading ? 'Creating...' : 'Create Invoice'}
               </Button>
@@ -382,6 +706,13 @@ const CreateInvoice = () => {
               <Button
                 variant="contained"
                 onClick={handleNext}
+                startIcon={<Receipt />}
+                sx={{
+                  bgcolor: 'rgba(59, 130, 246, 0.9)',
+                  '&:hover': { bgcolor: '#3b82f6' },
+                  fontWeight: 600,
+                  textTransform: 'none'
+                }}
               >
                 Next
               </Button>

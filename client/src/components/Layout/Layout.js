@@ -87,29 +87,86 @@ const Layout = ({ children }) => {
   };
 
   const drawer = (
-    <div>
-      <Toolbar>
-        <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 'bold' }}>
+    <Box
+      sx={{
+        height: '100%',
+        background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%)',
+        backdropFilter: 'blur(20px)',
+        borderRight: '1px solid rgba(148, 163, 184, 0.2)',
+      }}
+    >
+      <Box
+        sx={{
+          p: 3,
+          borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+          background: 'linear-gradient(135deg, rgba(59, 130, 246, 0.1) 0%, rgba(99, 102, 241, 0.1) 100%)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: '2px',
+            background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
+          }
+        }}
+      >
+        <Typography 
+          variant="h5" 
+          noWrap 
+          component="div" 
+          sx={{ 
+            fontWeight: 700,
+            color: '#f8fafc',
+            background: 'linear-gradient(90deg, #f8fafc 0%, #60a5fa 50%, #f8fafc 100%)',
+            backgroundClip: 'text',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            textAlign: 'center',
+            letterSpacing: '-0.025em'
+          }}
+        >
           InvoiceChain
         </Typography>
-      </Toolbar>
-      <Divider />
-      <List>
+      </Box>
+      <List sx={{ p: 2 }}>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding>
+          <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
             <ListItemButton
               selected={location.pathname === item.path}
               onClick={() => navigate(item.path)}
               sx={{
+                borderRadius: 2,
+                mb: 0.5,
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                '&:hover': {
+                  bgcolor: 'rgba(59, 130, 246, 0.1)',
+                  transform: 'translateX(4px)',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.15)',
+                },
                 '&.Mui-selected': {
-                  backgroundColor: 'primary.main',
-                  color: 'white',
+                  bgcolor: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)',
                   '&:hover': {
-                    backgroundColor: 'primary.dark',
+                    bgcolor: 'rgba(59, 130, 246, 0.2)',
                   },
                   '& .MuiListItemIcon-root': {
-                    color: 'white',
+                    color: '#3b82f6',
                   },
+                  '& .MuiListItemText-primary': {
+                    color: '#f8fafc',
+                    fontWeight: 600,
+                  },
+                },
+                '& .MuiListItemIcon-root': {
+                  color: '#94a3b8',
+                  minWidth: 40,
+                },
+                '& .MuiListItemText-primary': {
+                  color: '#94a3b8',
+                  fontWeight: 500,
                 },
               }}
             >
@@ -119,7 +176,7 @@ const Layout = ({ children }) => {
           </ListItem>
         ))}
       </List>
-    </div>
+    </Box>
   );
 
   return (
@@ -130,6 +187,10 @@ const Layout = ({ children }) => {
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          backdropFilter: 'blur(20px)',
+          borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
         }}
       >
         <Toolbar>
@@ -138,12 +199,32 @@ const Layout = ({ children }) => {
             aria-label="open drawer"
             edge="start"
             onClick={handleDrawerToggle}
-            sx={{ mr: 2, display: { sm: 'none' } }}
+            sx={{ 
+              mr: 2, 
+              display: { sm: 'none' },
+              color: '#f8fafc',
+              '&:hover': {
+                bgcolor: 'rgba(59, 130, 246, 0.1)',
+              }
+            }}
           >
             <MenuIcon />
           </IconButton>
           
-          <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
+          <Typography 
+            variant="h6" 
+            noWrap 
+            component="div" 
+            sx={{ 
+              flexGrow: 1,
+              color: '#f8fafc',
+              fontWeight: 600,
+              background: 'linear-gradient(90deg, #f8fafc 0%, #60a5fa 50%, #f8fafc 100%)',
+              backgroundClip: 'text',
+              WebkitBackgroundClip: 'text',
+              WebkitTextFillColor: 'transparent'
+            }}
+          >
             Blockchain Invoicing System
           </Typography>
 
@@ -152,15 +233,27 @@ const Layout = ({ children }) => {
             <Chip
               label={network.name}
               size="small"
-              color="secondary"
-              sx={{ mr: 2 }}
+              sx={{ 
+                mr: 2,
+                bgcolor: 'rgba(34, 197, 94, 0.15)',
+                color: '#22c55e',
+                border: '1px solid rgba(34, 197, 94, 0.3)',
+                fontWeight: 600
+              }}
             />
           )}
 
           {/* Wallet connection */}
           {isConnected ? (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <Typography variant="body2" sx={{ display: { xs: 'none', md: 'block' } }}>
+              <Typography 
+                variant="body2" 
+                sx={{ 
+                  display: { xs: 'none', md: 'block' },
+                  color: '#94a3b8',
+                  fontWeight: 500
+                }}
+              >
                 {parseFloat(balance).toFixed(4)} ETH
               </Typography>
               
@@ -168,9 +261,32 @@ const Layout = ({ children }) => {
                 color="inherit"
                 startIcon={<AccountBalanceWallet />}
                 onClick={handleMenuClick}
-                sx={{ textTransform: 'none' }}
+                sx={{
+                  bgcolor: 'rgba(59, 130, 246, 0.15)',
+                  border: '1px solid rgba(59, 130, 246, 0.3)',
+                  color: '#f8fafc',
+                  borderRadius: 2,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  '&:hover': {
+                    bgcolor: 'rgba(59, 130, 246, 0.25)',
+                    transform: 'translateY(-1px)',
+                    boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)',
+                  },
+                  transition: 'all 0.3s ease'
+                }}
               >
-                <Avatar sx={{ width: 24, height: 24, mr: 1, bgcolor: 'secondary.main' }}>
+                <Avatar 
+                  sx={{ 
+                    width: 24, 
+                    height: 24, 
+                    mr: 1, 
+                    bgcolor: 'rgba(99, 102, 241, 0.8)',
+                    color: '#f8fafc',
+                    fontSize: '0.75rem',
+                    fontWeight: 600
+                  }}
+                >
                   {account?.slice(2, 4).toUpperCase()}
                 </Avatar>
                 {formatAddress(account)}
@@ -182,13 +298,38 @@ const Layout = ({ children }) => {
                 onClose={handleMenuClose}
                 transformOrigin={{ horizontal: 'right', vertical: 'top' }}
                 anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+                sx={{
+                  '& .MuiPaper-root': {
+                    background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+                    backdropFilter: 'blur(20px)',
+                    border: '1px solid rgba(148, 163, 184, 0.2)',
+                    borderRadius: 2,
+                    mt: 1,
+                  }
+                }}
               >
-                <MenuItem onClick={copyAddress}>
-                  <ContentCopy fontSize="small" sx={{ mr: 1 }} />
+                <MenuItem 
+                  onClick={copyAddress}
+                  sx={{
+                    color: '#f8fafc',
+                    '&:hover': {
+                      bgcolor: 'rgba(59, 130, 246, 0.1)',
+                    }
+                  }}
+                >
+                  <ContentCopy fontSize="small" sx={{ mr: 1, color: '#3b82f6' }} />
                   Copy Address
                 </MenuItem>
-                <MenuItem onClick={handleDisconnect}>
-                  <Logout fontSize="small" sx={{ mr: 1 }} />
+                <MenuItem 
+                  onClick={handleDisconnect}
+                  sx={{
+                    color: '#f8fafc',
+                    '&:hover': {
+                      bgcolor: 'rgba(239, 68, 68, 0.1)',
+                    }
+                  }}
+                >
+                  <Logout fontSize="small" sx={{ mr: 1, color: '#ef4444' }} />
                   Disconnect
                 </MenuItem>
               </Menu>
@@ -200,7 +341,24 @@ const Layout = ({ children }) => {
               startIcon={<AccountBalanceWallet />}
               onClick={connectWallet}
               disabled={isConnecting}
-              sx={{ borderColor: 'white', '&:hover': { borderColor: 'white' } }}
+              sx={{ 
+                borderColor: 'rgba(59, 130, 246, 0.5)',
+                color: '#f8fafc',
+                borderRadius: 2,
+                textTransform: 'none',
+                fontWeight: 600,
+                '&:hover': { 
+                  borderColor: '#3b82f6',
+                  bgcolor: 'rgba(59, 130, 246, 0.1)',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 4px 12px rgba(59, 130, 246, 0.2)',
+                },
+                '&:disabled': {
+                  borderColor: 'rgba(148, 163, 184, 0.3)',
+                  color: 'rgba(148, 163, 184, 0.5)',
+                },
+                transition: 'all 0.3s ease'
+              }}
             >
               {isConnecting ? 'Connecting...' : 'Connect Wallet'}
             </Button>
@@ -221,7 +379,13 @@ const Layout = ({ children }) => {
           }}
           sx={{
             display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%)',
+              backdropFilter: 'blur(20px)',
+              borderRight: '1px solid rgba(148, 163, 184, 0.2)',
+            },
           }}
         >
           {drawer}
@@ -230,7 +394,13 @@ const Layout = ({ children }) => {
           variant="permanent"
           sx={{
             display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            '& .MuiDrawer-paper': { 
+              boxSizing: 'border-box', 
+              width: drawerWidth,
+              background: 'linear-gradient(180deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.98) 100%)',
+              backdropFilter: 'blur(20px)',
+              borderRight: '1px solid rgba(148, 163, 184, 0.2)',
+            },
           }}
           open
         >
@@ -242,12 +412,14 @@ const Layout = ({ children }) => {
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%)',
+          minHeight: '100vh',
           width: { sm: `calc(100% - ${drawerWidth}px)` },
         }}
       >
-        <Toolbar />
-        {children}
+        <Box sx={{ mt: 8 }}>
+          {children}
+        </Box>
       </Box>
     </Box>
   );

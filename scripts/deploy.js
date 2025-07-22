@@ -1,4 +1,5 @@
 const { ethers } = require("hardhat");
+const hre = require("hardhat");
 const fs = require("fs");
 const path = require("path");
 
@@ -8,27 +9,28 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with the account:", deployer.address);
   
-  const balance = await deployer.getBalance();
-  console.log("Account balance:", ethers.utils.formatEther(balance), "ETH");
+  const balance = await deployer.provider.getBalance(deployer.address);
+  console.log("Account balance:", ethers.formatEther(balance), "ETH");
   
   // Deploy InvoiceManager contract
   const InvoiceManager = await ethers.getContractFactory("InvoiceManager");
   console.log("Deploying InvoiceManager...");
   
   const invoiceManager = await InvoiceManager.deploy();
-  await invoiceManager.deployed();
+  await invoiceManager.waitForDeployment();
   
-  console.log("InvoiceManager deployed to:", invoiceManager.address);
-  console.log("Transaction hash:", invoiceManager.deployTransaction.hash);
+  const contractAddress = await invoiceManager.getAddress();
+  console.log("InvoiceManager deployed to:", contractAddress);
+  console.log("Transaction hash:", invoiceManager.deploymentTransaction().hash);
   
   // Save deployment info
   const deploymentInfo = {
     network: hre.network.name,
-    contractAddress: invoiceManager.address,
+    contractAddress: contractAddress,
     deployerAddress: deployer.address,
     deploymentTime: new Date().toISOString(),
-    transactionHash: invoiceManager.deployTransaction.hash,
-    blockNumber: invoiceManager.deployTransaction.blockNumber,
+    transactionHash: invoiceManager.deploymentTransaction().hash,
+    blockNumber: invoiceManager.deploymentTransaction().blockNumber,
   };
   
   // Create deployment directory if it doesn't exist
@@ -52,7 +54,7 @@ async function main() {
   
   const abiFile = path.join(abiDir, "InvoiceManager.json");
   fs.writeFileSync(abiFile, JSON.stringify({
-    address: invoiceManager.address,
+    address: contractAddress,
     abi: artifact.abi
   }, null, 2));
   
@@ -63,11 +65,11 @@ async function main() {
   // Verify contract on Etherscan (if not local network)
   if (hre.network.name !== "hardhat" && hre.network.name !== "localhost") {
     console.log("Waiting for block confirmations...");
-    await invoiceManager.deployTransaction.wait(6);
+    await invoiceManager.deploymentTransaction().wait(6);
     
     try {
       await hre.run("verify:verify", {
-        address: invoiceManager.address,
+        address: contractAddress,
         constructorArguments: [],
       });
       console.log("✅ Contract verified on Etherscan");
@@ -80,10 +82,10 @@ async function main() {
   console.log("\n🎉 Deployment Summary:");
   console.log("========================");
   console.log(`Network: ${hre.network.name}`);
-  console.log(`Contract Address: ${invoiceManager.address}`);
+  console.log(`Contract Address: ${contractAddress}`);
   console.log(`Deployer: ${deployer.address}`);
-  console.log(`Gas Used: ${invoiceManager.deployTransaction.gasLimit?.toString() || 'N/A'}`);
-  console.log(`Transaction Hash: ${invoiceManager.deployTransaction.hash}`);
+  console.log(`Gas Used: ${invoiceManager.deploymentTransaction().gasLimit?.toString() || 'N/A'}`);
+  console.log(`Transaction Hash: ${invoiceManager.deploymentTransaction().hash}`);
   
   if (hre.network.name === "localhost" || hre.network.name === "hardhat") {
     console.log("\n🔧 Next Steps for Local Development:");
