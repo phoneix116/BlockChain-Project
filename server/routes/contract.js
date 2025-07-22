@@ -1,6 +1,7 @@
 const express = require('express');
 const { ethers } = require('ethers');
 const Joi = require('joi');
+const path = require('path');
 
 const router = express.Router();
 
@@ -10,17 +11,19 @@ let contractAddress = '';
 
 // Try to load contract details
 try {
-  const contractData = require('../../client/src/contracts/InvoiceManager.json');
+  const contractPath = path.join(__dirname, '../../client/src/contracts/InvoiceManager.json');
+  const contractData = require(contractPath);
   contractABI = contractData.abi;
   contractAddress = contractData.address;
+  console.log(`✅ Contract loaded: ${contractAddress}`);
 } catch (error) {
-  console.warn('Contract ABI not found. Deploy contract first.');
+  console.warn('❌ Contract ABI not found. Deploy contract first.', error.message);
 }
 
 // Initialize provider
 const getProvider = () => {
   const rpcUrl = process.env.RPC_URL || 'http://localhost:8545';
-  return new ethers.providers.JsonRpcProvider(rpcUrl);
+  return new ethers.JsonRpcProvider(rpcUrl);
 };
 
 // Get contract instance
@@ -49,14 +52,23 @@ router.get('/info', async (req, res) => {
     if (!contractAddress) {
       return res.status(404).json({
         error: 'Contract not deployed',
-        message: 'Please deploy the contract first'
+        message: 'Please deploy the contract first',
+        details: 'No contract address found in configuration'
+      });
+    }
+
+    if (!contractABI.length) {
+      return res.status(404).json({
+        error: 'Contract ABI not available',
+        message: 'Contract ABI could not be loaded',
+        details: 'Check if the contract artifact exists'
       });
     }
 
     const contract = getContract();
     const provider = getProvider();
     
-    // Get basic contract info
+    // Test provider connection
     const network = await provider.getNetwork();
     const blockNumber = await provider.getBlockNumber();
     
@@ -71,22 +83,23 @@ router.get('/info', async (req, res) => {
         address: contractAddress,
         network: {
           name: network.name,
-          chainId: network.chainId
+          chainId: network.chainId.toString()
         },
         blockNumber,
         state: {
           nextInvoiceId: nextInvoiceId.toString(),
-          disputeFee: ethers.utils.formatEther(disputeFee),
+          disputeFee: ethers.formatEther(disputeFee),
           platformFee: platformFee.toString()
         }
       }
     });
-
+    
   } catch (error) {
     console.error('Contract info error:', error);
     res.status(500).json({
       error: 'Failed to get contract info',
-      message: error.message
+      message: error.message,
+      details: error.code || 'Unknown error'
     });
   }
 });
@@ -140,7 +153,7 @@ router.get('/user/:address/invoices', async (req, res) => {
   try {
     const { address } = req.params;
     
-    if (!ethers.utils.isAddress(address)) {
+    if (!ethers.isAddress(address)) {
       return res.status(400).json({
         error: 'Invalid address',
         message: 'Please provide a valid Ethereum address'
@@ -285,7 +298,7 @@ router.get('/dispute/:invoiceId', async (req, res) => {
       status: dispute.status,
       createdAt: new Date(dispute.createdAt.toNumber() * 1000).toISOString(),
       resolvedAt: dispute.resolvedAt.toNumber() > 0 ? new Date(dispute.resolvedAt.toNumber() * 1000).toISOString() : null,
-      resolver: dispute.resolver !== ethers.constants.AddressZero ? dispute.resolver : null
+      resolver: dispute.resolver !== ethers.ZeroAddress ? dispute.resolver : null
     };
 
     res.json({
@@ -373,7 +386,7 @@ router.post('/validate-transaction', async (req, res) => {
     const { amount, dueDate } = value;
     
     try {
-      ethers.utils.parseEther(amount);
+      ethers.parseEther(amount);
     } catch (parseError) {
       return res.status(400).json({
         error: 'Invalid amount',
