@@ -57,7 +57,7 @@ const InvoiceList = () => {
       filtered = filtered.filter(invoice => 
         invoice.id.includes(searchTerm) ||
         invoice.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        invoice.recipient.toLowerCase().includes(searchTerm.toLowerCase())
+        (invoice.recipient?.walletAddress || invoice.recipient || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -105,7 +105,14 @@ const InvoiceList = () => {
   };
 
   const formatAmount = (amount) => {
-    return (parseFloat(amount) / 1e18).toFixed(4);
+    try {
+      if (!amount) return '0.0000';
+      const numAmount = typeof amount === 'object' ? parseFloat(amount.toString()) : parseFloat(amount);
+      return isNaN(numAmount) ? '0.0000' : numAmount.toFixed(4);
+    } catch (error) {
+      console.warn('Error formatting amount:', error);
+      return '0.0000';
+    }
   };
 
   const getStatusBadge = (status) => (
@@ -466,9 +473,9 @@ const InvoiceList = () => {
                         </Typography>
                       </TableCell>
                       <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
-                        <Tooltip title={invoice.recipient}>
+                        <Tooltip title={invoice.recipient?.walletAddress || invoice.recipient}>
                           <Typography variant="body2" sx={{ color: '#94a3b8', fontFamily: 'monospace' }}>
-                            {formatAddress(invoice.recipient)}
+                            {formatAddress(invoice.recipient?.walletAddress || invoice.recipient)}
                           </Typography>
                         </Tooltip>
                       </TableCell>

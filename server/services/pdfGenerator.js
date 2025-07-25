@@ -103,6 +103,53 @@ class InvoicePDFGenerator {
       
       // Client information
       const clientAddress = invoiceData.recipient || 'N/A';
+      const clientName = invoiceData.recipientName || '';
+      const clientEmail = invoiceData.recipientEmail || '';
+      
+      // Show recipient name if available
+      if (clientName && clientName !== 'N/A') {
+        page.drawText('Recipient:', {
+          x: margin,
+          y: yPosition,
+          size: 11,
+          font: helveticaBoldFont,
+          color: black,
+        });
+        
+        yPosition -= 18;
+        page.drawText(clientName, {
+          x: margin,
+          y: yPosition,
+          size: 10,
+          font: helveticaFont,
+          color: black,
+        });
+        
+        yPosition -= 15;
+      }
+      
+      // Show email if available
+      if (clientEmail) {
+        page.drawText('Email:', {
+          x: margin,
+          y: yPosition,
+          size: 11,
+          font: helveticaBoldFont,
+          color: black,
+        });
+        
+        yPosition -= 18;
+        page.drawText(clientEmail, {
+          x: margin,
+          y: yPosition,
+          size: 10,
+          font: helveticaFont,
+          color: gray,
+        });
+        
+        yPosition -= 15;
+      }
+      
       page.drawText('Ethereum Address:', {
         x: margin,
         y: yPosition,

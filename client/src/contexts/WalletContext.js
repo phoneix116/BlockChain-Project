@@ -142,7 +142,8 @@ export const WalletProvider = ({ children }) => {
 
   // Format address for display
   const formatAddress = (address) => {
-    if (!address) return '';
+    if (!address || typeof address !== 'string') return '';
+    if (address.length < 10) return address; // Return as-is if too short to truncate
     return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
