@@ -1,5 +1,11 @@
 const express = require('express');
 const Joi = require('joi');
+const pdfGenerator = require('../services/pdfGenerator');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
+const FormData = require('form-data');
+const axios = require('axios');
 
 const router = express.Router();
 
@@ -376,6 +382,228 @@ router.get('/export', async (req, res) => {
     console.error('Export error:', error);
     res.status(500).json({
       error: 'Export failed',
+      message: error.message
+    });
+  }
+});
+
+// Validation schema for invoice generation
+const generateInvoiceSchema = Joi.object({
+  recipient: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required()
+    .messages({
+      'string.pattern.base': 'Recipient must be a valid Ethereum address'
+    }),
+  amount: Joi.string().required()
+    .messages({
+      'string.empty': 'Amount is required'
+    }),
+  description: Joi.string().min(1).max(500).required()
+    .messages({
+      'string.empty': 'Description is required',
+      'string.max': 'Description cannot exceed 500 characters'
+    }),
+  dueDate: Joi.date().iso().min('now').required()
+    .messages({
+      'date.min': 'Due date must be in the future'
+    }),
+  title: Joi.string().min(1).max(100).optional().default('Blockchain Invoice')
+});
+
+// POST /api/invoice/generate - Generate invoice with PDF automatically
+router.post('/generate', async (req, res) => {
+  try {
+    // Validate request body
+    const { error, value } = generateInvoiceSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: error.details.map(detail => ({
+          field: detail.path.join('.'),
+          message: detail.message
+        }))
+      });
+    }
+
+    const { recipient, amount, description, dueDate, title } = value;
+
+    console.log('📄 Generating invoice PDF automatically...');
+
+    // Prepare invoice data for PDF generation
+    const invoiceData = {
+      recipient,
+      amount,
+      description,
+      dueDate,
+      createdAt: new Date().toISOString(),
+      title
+    };
+
+    // Generate PDF using pdf-lib
+    const pdfBytes = await pdfGenerator.generateInvoicePDF(invoiceData);
+
+    console.log('✅ PDF generated successfully, size:', pdfBytes.length, 'bytes');
+
+    // Prepare metadata for IPFS upload
+    const metadata = {
+      filename: `invoice-${Date.now()}.pdf`,
+      title: title || 'Blockchain Invoice',
+      description: description,
+      invoiceData: {
+        recipient,
+        amount,
+        dueDate,
+        createdAt: invoiceData.createdAt
+      }
+    };
+
+    // Upload PDF to IPFS (Pinata or local storage)
+    let ipfsResult;
+
+    if (process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY) {
+      console.log('📤 Uploading generated PDF to Pinata IPFS...');
+      
+      const formData = new FormData();
+      formData.append('file', Buffer.from(pdfBytes), {
+        filename: metadata.filename,
+        contentType: 'application/pdf'
+      });
+
+      const pinataMetadata = JSON.stringify({
+        name: metadata.title || 'Blockchain Invoice',
+        type: 'invoice-pdf'
+      });
+
+      formData.append('pinataMetadata', pinataMetadata);
+      formData.append('pinataOptions', JSON.stringify({ cidVersion: 0 }));
+
+      try {
+        const response = await axios.post(
+          'https://api.pinata.cloud/pinning/pinFileToIPFS',
+          formData,
+          {
+            headers: {
+              'pinata_api_key': process.env.PINATA_API_KEY,
+              'pinata_secret_api_key': process.env.PINATA_SECRET_KEY,
+              ...formData.getHeaders()
+            },
+            timeout: 60000
+          }
+        );
+
+        ipfsResult = {
+          success: true,
+          ipfsHash: response.data.IpfsHash,
+          size: pdfBytes.length,
+          timestamp: new Date().toISOString()
+        };
+
+        console.log('✅ Generated PDF uploaded to Pinata IPFS:', response.data.IpfsHash);
+      } catch (pinataError) {
+        console.error('❌ Pinata upload failed:', pinataError.message);
+        throw pinataError;
+      }
+    } else {
+      // Fallback to local storage
+      console.log('📁 Saving generated PDF locally...');
+      
+      const mockIPFSHash = 'Qm' + crypto.randomBytes(32).toString('hex').substring(0, 44);
+      const uploadsDir = path.join(__dirname, '../uploads');
+      
+      if (!fs.existsSync(uploadsDir)) {
+        fs.mkdirSync(uploadsDir, { recursive: true });
+      }
+
+      const fileName = `${mockIPFSHash}.pdf`;
+      const filePath = path.join(uploadsDir, fileName);
+      const metadataPath = path.join(uploadsDir, `${mockIPFSHash}.json`);
+
+      // Save PDF file
+      fs.writeFileSync(filePath, pdfBytes);
+      
+      // Save metadata
+      fs.writeFileSync(metadataPath, JSON.stringify({
+        ...metadata,
+        ipfsHash: mockIPFSHash,
+        uploadedAt: new Date().toISOString(),
+        generated: true
+      }, null, 2));
+
+      ipfsResult = {
+        success: true,
+        ipfsHash: mockIPFSHash,
+        size: pdfBytes.length,
+        timestamp: new Date().toISOString()
+      };
+
+      console.log('✅ Generated PDF saved locally:', fileName);
+    }
+
+    // Return success response
+    res.json({
+      success: true,
+      message: 'Invoice PDF generated and uploaded successfully',
+      data: {
+        ipfsHash: ipfsResult.ipfsHash,
+        fileName: metadata.filename,
+        size: ipfsResult.size,
+        invoiceData: {
+          recipient,
+          amount,
+          description,
+          dueDate,
+          title,
+          createdAt: invoiceData.createdAt
+        },
+        downloadUrl: process.env.IPFS_GATEWAY ? 
+          `${process.env.IPFS_GATEWAY}${ipfsResult.ipfsHash}` : 
+          `http://localhost:3001/api/ipfs/file/${ipfsResult.ipfsHash}`
+      }
+    });
+
+  } catch (error) {
+    console.error('Invoice generation error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate invoice',
+      message: error.message
+    });
+  }
+});
+
+// POST /api/invoice/preview - Generate PDF preview without uploading
+router.post('/preview', async (req, res) => {
+  try {
+    const { error, value } = generateInvoiceSchema.validate(req.body);
+    if (error) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        details: error.details.map(detail => detail.message)
+      });
+    }
+
+    const invoiceData = {
+      ...value,
+      createdAt: new Date().toISOString()
+    };
+
+    // Generate PDF
+    const pdfBytes = await pdfGenerator.generateInvoicePDF(invoiceData);
+
+    // Set headers for PDF response
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="invoice-preview.pdf"');
+    res.setHeader('Content-Length', pdfBytes.length);
+
+    // Send PDF directly
+    res.end(Buffer.from(pdfBytes));
+
+  } catch (error) {
+    console.error('PDF preview error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to generate PDF preview',
       message: error.message
     });
   }

@@ -60,7 +60,12 @@ const ipfsAPI = {
 
   // Download file from IPFS
   downloadFile: async (hash) => {
-    const url = ipfsAPI.getGatewayUrl(hash);
+    // Use Pinata gateway if available, otherwise local backend
+    const gatewayUrl = process.env.REACT_APP_IPFS_GATEWAY || 'http://localhost:3001/api/ipfs/file/';
+    const url = gatewayUrl.includes('gateway.pinata.cloud') 
+      ? `${gatewayUrl}${hash}`
+      : `${API_BASE_URL}/api/ipfs/file/${hash}`;
+      
     try {
       const response = await fetch(url);
       if (!response.ok) {

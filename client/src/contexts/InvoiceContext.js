@@ -93,15 +93,25 @@ export const InvoiceProvider = ({ children }) => {
     try {
       setLoading(true);
 
-      // Upload PDF to IPFS first
-      const uploadResponse = await ipfsAPI.uploadFile(
-        invoiceData.file,
-        invoiceData.title,
-        invoiceData.description
-      );
+      let ipfsHash;
 
-      if (!uploadResponse.success) {
-        throw new Error('Failed to upload PDF to IPFS');
+      // Check if IPFS hash is already provided (from auto-generated PDF)
+      if (invoiceData.ipfsHash) {
+        ipfsHash = invoiceData.ipfsHash;
+      } else if (invoiceData.file) {
+        // Legacy: upload file if provided
+        const uploadResponse = await ipfsAPI.uploadFile(
+          invoiceData.file,
+          invoiceData.title,
+          invoiceData.description
+        );
+
+        if (!uploadResponse.success) {
+          throw new Error('Failed to upload PDF to IPFS');
+        }
+        ipfsHash = uploadResponse.ipfsHash;
+      } else {
+        throw new Error('No PDF file or IPFS hash provided');
       }
 
       // Convert due date to timestamp
@@ -109,7 +119,7 @@ export const InvoiceProvider = ({ children }) => {
 
       // Create invoice on blockchain
       const tx = await contract.createInvoice(
-        uploadResponse.ipfsHash,
+        ipfsHash,
         invoiceData.recipient,
         ethers.utils.parseEther(invoiceData.amount.toString()),
         invoiceData.tokenAddress || ethers.constants.AddressZero,
@@ -133,7 +143,7 @@ export const InvoiceProvider = ({ children }) => {
         success: true,
         invoiceId,
         txHash: receipt.transactionHash,
-        ipfsHash: uploadResponse.ipfsHash
+        ipfsHash
       };
     } catch (error) {
       console.error('Failed to create invoice:', error);

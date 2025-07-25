@@ -20,11 +20,12 @@ import ipfsAPI from '../services/ipfsAPI';
 
 const InvoiceDetails = () => {
   const { id } = useParams();
-  const { getInvoiceDetails, formatInvoiceStatus, getStatusColor } = useInvoice();
+  const { getInvoiceDetails, formatInvoiceStatus, getStatusColor, payInvoiceETH, payInvoiceToken } = useInvoice();
   
   const [invoice, setInvoice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [paymentLoading, setPaymentLoading] = useState(false);
 
   useEffect(() => {
     const loadInvoice = async () => {
@@ -47,18 +48,64 @@ const InvoiceDetails = () => {
   const handleDownloadPDF = async () => {
     if (invoice?.ipfsHash) {
       try {
-        const blob = await ipfsAPI.downloadFile(invoice.ipfsHash);
+        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/ipfs/file/${invoice.ipfsHash}`);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        
+        // Verify it's a PDF
+        if (blob.type !== 'application/pdf') {
+          console.warn('Downloaded file is not a PDF:', blob.type);
+        }
+        
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `invoice-${id}.pdf`;
+        a.style.display = 'none';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+        
+        console.log('PDF download successful');
       } catch (error) {
         console.error('Download failed:', error);
+        alert('Failed to download PDF. Please try again.');
       }
+    } else {
+      alert('PDF file not available for this invoice.');
+    }
+  };
+
+  const handlePayInvoice = async () => {
+    if (!invoice) return;
+    
+    try {
+      setPaymentLoading(true);
+      
+      // Convert amount from wei to ETH for payment
+      const amountInETH = (parseFloat(invoice.amount) / 1e18).toString();
+      
+      // Check if it's a token payment or ETH payment
+      if (invoice.tokenAddress && invoice.tokenAddress !== '0x0000000000000000000000000000000000000000') {
+        await payInvoiceToken(id, invoice.tokenAddress, amountInETH);
+      } else {
+        await payInvoiceETH(id, amountInETH);
+      }
+      
+      // Reload invoice data to get updated status
+      const updatedInvoice = await getInvoiceDetails(id);
+      setInvoice(updatedInvoice);
+      
+    } catch (error) {
+      console.error('Payment failed:', error);
+      alert('Payment failed. Please try again.');
+    } finally {
+      setPaymentLoading(false);
     }
   };
 
@@ -323,36 +370,47 @@ const InvoiceDetails = () => {
                   variant="outlined"
                   startIcon={<Download />}
                   onClick={handleDownloadPDF}
+                  disabled={!invoice?.ipfsHash}
                   fullWidth
                   sx={{
-                    borderColor: 'rgba(148, 163, 184, 0.3)',
-                    color: '#94a3b8',
+                    borderColor: invoice?.ipfsHash ? 'rgba(148, 163, 184, 0.3)' : 'rgba(148, 163, 184, 0.1)',
+                    color: invoice?.ipfsHash ? '#94a3b8' : 'rgba(148, 163, 184, 0.5)',
                     '&:hover': {
-                      borderColor: '#3b82f6',
-                      color: '#3b82f6',
-                      bgcolor: 'rgba(59, 130, 246, 0.1)'
+                      borderColor: invoice?.ipfsHash ? '#3b82f6' : 'rgba(148, 163, 184, 0.1)',
+                      color: invoice?.ipfsHash ? '#3b82f6' : 'rgba(148, 163, 184, 0.5)',
+                      bgcolor: invoice?.ipfsHash ? 'rgba(59, 130, 246, 0.1)' : 'transparent'
+                    },
+                    '&:disabled': {
+                      borderColor: 'rgba(148, 163, 184, 0.1)',
+                      color: 'rgba(148, 163, 184, 0.5)'
                     },
                     borderRadius: 2,
                     textTransform: 'none',
                     fontWeight: 600
                   }}
                 >
-                  Download PDF
+                  {invoice?.ipfsHash ? 'Download PDF' : 'PDF Not Available'}
                 </Button>
                 {invoice.status === 0 && (
                   <Button
                     variant="contained"
                     startIcon={<Payment />}
+                    onClick={handlePayInvoice}
+                    disabled={paymentLoading}
                     fullWidth
                     sx={{
                       bgcolor: 'rgba(59, 130, 246, 0.9)',
                       '&:hover': { bgcolor: '#3b82f6' },
+                      '&:disabled': { 
+                        bgcolor: 'rgba(59, 130, 246, 0.5)',
+                        color: 'rgba(255, 255, 255, 0.7)' 
+                      },
                       borderRadius: 2,
                       textTransform: 'none',
                       fontWeight: 600
                     }}
                   >
-                    Pay Invoice
+                    {paymentLoading ? 'Processing Payment...' : 'Pay Invoice'}
                   </Button>
                 )}
               </Box>

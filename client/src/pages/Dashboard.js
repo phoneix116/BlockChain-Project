@@ -19,6 +19,7 @@ import {
   Fade,
   Grow,
   Container,
+  Divider,
 } from '@mui/material';
 import {
   Receipt,
@@ -603,22 +604,42 @@ const Dashboard = () => {
                   <CircularProgress />
                 </Box>
               ) : userInvoices.length === 0 ? (
-                <Alert severity="info">
+                <Alert 
+                  severity="info"
+                  sx={{
+                    bgcolor: 'rgba(59, 130, 246, 0.1)',
+                    border: '1px solid rgba(59, 130, 246, 0.2)',
+                    color: '#3b82f6',
+                    '& .MuiAlert-icon': {
+                      color: '#3b82f6'
+                    }
+                  }}
+                >
                   No invoices found. Create your first invoice to get started!
                 </Alert>
               ) : (
-                <List>
+                <List sx={{ bgcolor: 'transparent' }}>
                   {userInvoices.slice(0, 5).map((invoice) => (
                     <ListItem
                       key={invoice.id}
                       button
                       onClick={() => navigate(`/invoice/${invoice.id}`)}
                       divider
+                      sx={{
+                        borderColor: 'rgba(148, 163, 184, 0.2)',
+                        '&:hover': {
+                          bgcolor: 'rgba(59, 130, 246, 0.1)',
+                        },
+                        '&.MuiListItem-button': {
+                          borderRadius: 2,
+                          mb: 1,
+                        }
+                      }}
                     >
                       <ListItemText
                         primary={
                           <Box display="flex" justifyContent="space-between" alignItems="center">
-                            <Typography variant="subtitle1">
+                            <Typography variant="subtitle1" sx={{ color: '#f8fafc', fontWeight: 600 }}>
                               Invoice #{invoice.id}
                             </Typography>
                             <Chip
@@ -630,10 +651,10 @@ const Dashboard = () => {
                         }
                         secondary={
                           <Box>
-                            <Typography variant="body2" color="text.secondary">
-                              Amount: {(parseFloat(invoice.amount) / 1e18).toFixed(4)} ETH
+                            <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                              Amount: <span style={{ color: '#22c55e', fontWeight: 600 }}>{(parseFloat(invoice.amount) / 1e18).toFixed(4)} ETH</span>
                             </Typography>
-                            <Typography variant="body2" color="text.secondary">
+                            <Typography variant="body2" sx={{ color: '#94a3b8' }}>
                               Due: {new Date(invoice.dueDate).toLocaleDateString()}
                             </Typography>
                           </Box>
@@ -650,128 +671,187 @@ const Dashboard = () => {
 
         {/* Quick Actions */}
         <Grid item xs={12} md={4}>
-          <Card 
-            sx={{
-              background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
-              borderRadius: 3,
-              border: '1px solid rgba(148, 163, 184, 0.2)',
-              boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
-              backdropFilter: 'blur(20px)',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '2px',
-                background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
-              }
-            }}
-          >
-            <CardContent>
-              <Typography variant="h6" component="h2" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
-                Quick Actions
-              </Typography>
-              <Box display="flex" flexDirection="column" gap={2}>
-                <Button
-                  variant="contained"
-                  fullWidth
-                  startIcon={<Add />}
-                  onClick={() => navigate('/create')}
-                  sx={{
-                    bgcolor: 'rgba(59, 130, 246, 0.9)',
-                    '&:hover': { bgcolor: '#3b82f6' },
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600
-                  }}
-                >
-                  Create New Invoice
-                </Button>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<Receipt />}
-                  onClick={() => navigate('/invoices')}
-                  sx={{
-                    borderColor: 'rgba(148, 163, 184, 0.3)',
-                    color: '#94a3b8',
-                    '&:hover': {
-                      borderColor: '#3b82f6',
-                      color: '#3b82f6',
-                      bgcolor: 'rgba(59, 130, 246, 0.1)'
-                    },
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600
-                  }}
-                >
-                  View All Invoices
-                </Button>
-                <Button
-                  variant="outlined"
-                  fullWidth
-                  startIcon={<TrendingUp />}
-                  onClick={() => navigate('/analytics')}
-                  sx={{
-                    borderColor: 'rgba(148, 163, 184, 0.3)',
-                    color: '#94a3b8',
-                    '&:hover': {
-                      borderColor: '#3b82f6',
-                      color: '#3b82f6',
-                      bgcolor: 'rgba(59, 130, 246, 0.1)'
-                    },
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600
-                  }}
-                >
-                  View Analytics
-                </Button>
-              </Box>
-            </CardContent>
-          </Card>
+          <Box display="flex" flexDirection="column" gap={3} height="100%">
+            <Card 
+              sx={{
+                background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+                borderRadius: 3,
+                border: '1px solid rgba(148, 163, 184, 0.2)',
+                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+                backdropFilter: 'blur(20px)',
+                position: 'relative',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '2px',
+                  background: 'linear-gradient(90deg, transparent, #3b82f6, transparent)',
+                }
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" component="h2" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600, mb: 3 }}>
+                  Quick Actions
+                </Typography>
+                <Box display="flex" flexDirection="column" gap={2}>
+                  <Button
+                    variant="contained"
+                    fullWidth
+                    startIcon={<Add />}
+                    onClick={() => navigate('/create')}
+                    sx={{
+                      bgcolor: 'rgba(59, 130, 246, 0.9)',
+                      '&:hover': { 
+                        bgcolor: '#3b82f6',
+                        transform: 'translateY(-1px)',
+                        boxShadow: '0 8px 25px rgba(59, 130, 246, 0.3)'
+                      },
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      py: 1.5,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    Create New Invoice
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<Receipt />}
+                    onClick={() => navigate('/invoices')}
+                    sx={{
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                      color: '#94a3b8',
+                      '&:hover': {
+                        borderColor: '#3b82f6',
+                        color: '#3b82f6',
+                        bgcolor: 'rgba(59, 130, 246, 0.1)',
+                        transform: 'translateY(-1px)'
+                      },
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      py: 1.5,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    View All Invoices
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    fullWidth
+                    startIcon={<TrendingUp />}
+                    onClick={() => navigate('/analytics')}
+                    sx={{
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                      color: '#94a3b8',
+                      '&:hover': {
+                        borderColor: '#3b82f6',
+                        color: '#3b82f6',
+                        bgcolor: 'rgba(59, 130, 246, 0.1)',
+                        transform: 'translateY(-1px)'
+                      },
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                      py: 1.5,
+                      transition: 'all 0.3s ease'
+                    }}
+                  >
+                    View Analytics
+                  </Button>
+                </Box>
+              </CardContent>
+            </Card>
 
-          {/* Account Info */}
-          <Card 
-            sx={{ 
-              mt: 2,
-              background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
-              borderRadius: 3,
-              border: '1px solid rgba(148, 163, 184, 0.2)',
-              boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
-              backdropFilter: 'blur(20px)',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                height: '2px',
-                background: 'linear-gradient(90deg, transparent, #22c55e, transparent)',
-              }
-            }}
-          >
-            <CardContent>
-              <Typography variant="h6" component="h2" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
-                Account Summary
-              </Typography>
-              <Box>
-                <Typography variant="body2" sx={{ color: '#94a3b8', mb: 1 }}>
-                  Connected Address:
+            {/* Account Info */}
+            <Card 
+              sx={{ 
+                background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+                borderRadius: 3,
+                border: '1px solid rgba(148, 163, 184, 0.2)',
+                boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+                backdropFilter: 'blur(20px)',
+                position: 'relative',
+                flex: 1,
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: '2px',
+                  background: 'linear-gradient(90deg, transparent, #22c55e, transparent)',
+                }
+              }}
+            >
+              <CardContent sx={{ p: 3 }}>
+                <Typography variant="h6" component="h2" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600, mb: 3 }}>
+                  Account Summary
                 </Typography>
-                <Typography variant="body2" sx={{ wordBreak: 'break-all', mb: 2, color: '#e2e8f0', fontFamily: 'monospace' }}>
-                  {account}
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#94a3b8', mb: 0.5 }}>
-                  Total Invoices: <span style={{ color: '#f8fafc', fontWeight: 600 }}>{stats.total}</span>
-                </Typography>
-                <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-                  Success Rate: <span style={{ color: '#22c55e', fontWeight: 600 }}>{stats.total > 0 ? Math.round((stats.paid / stats.total) * 100) : 0}%</span>
-                </Typography>
-              </Box>
-            </CardContent>
-          </Card>
+                <Box display="flex" flexDirection="column" gap={2}>
+                  <Box>
+                    <Typography variant="body2" sx={{ color: '#94a3b8', mb: 1 }}>
+                      Connected Address
+                    </Typography>
+                    <Typography 
+                      variant="body2" 
+                      sx={{ 
+                        color: '#f8fafc', 
+                        fontFamily: 'monospace',
+                        fontSize: '0.75rem',
+                        wordBreak: 'break-all',
+                        bgcolor: 'rgba(15, 23, 42, 0.8)',
+                        p: 1.5,
+                        borderRadius: 1,
+                        border: '1px solid rgba(148, 163, 184, 0.2)'
+                      }}
+                    >
+                      {account}
+                    </Typography>
+                  </Box>
+                  
+                  <Divider sx={{ borderColor: 'rgba(148, 163, 184, 0.2)', my: 1 }} />
+                  
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                      Total Invoices
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#3b82f6', fontWeight: 600 }}>
+                      {stats.total}
+                    </Typography>
+                  </Box>
+                  
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                      Success Rate
+                    </Typography>
+                    <Typography 
+                      variant="h6" 
+                      sx={{ 
+                        color: stats.total > 0 && stats.paid > 0 ? '#22c55e' : '#94a3b8', 
+                        fontWeight: 600 
+                      }}
+                    >
+                      {stats.total > 0 ? Math.round((stats.paid / stats.total) * 100) : 0}%
+                    </Typography>
+                  </Box>
+                  
+                  <Box display="flex" justifyContent="space-between" alignItems="center">
+                    <Typography variant="body2" sx={{ color: '#94a3b8' }}>
+                      Total Earned
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: '#f59e0b', fontWeight: 600 }}>
+                      {stats.totalAmount.toFixed(3)} ETH
+                    </Typography>
+                  </Box>
+                </Box>
+              </CardContent>
+            </Card>
+          </Box>
         </Grid>
       </Grid>
     </Container>

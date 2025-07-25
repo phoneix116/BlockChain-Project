@@ -254,11 +254,38 @@ const InvoiceList = () => {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Search />
+                      <Search sx={{ color: '#94a3b8' }} />
                     </InputAdornment>
                   ),
                 }}
                 placeholder="Search by ID, description, or recipient"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiInputBase-input::placeholder': {
+                    color: '#64748b',
+                    opacity: 1,
+                  },
+                }}
               />
             </Grid>
             <Grid item xs={12} sm={3} md={2}>
@@ -268,6 +295,32 @@ const InvoiceList = () => {
                 label="Status"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiSelect-select': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: '#94a3b8',
+                  },
+                }}
               >
                 <MenuItem value="all">All</MenuItem>
                 <MenuItem value="0">Created</MenuItem>
@@ -284,6 +337,32 @@ const InvoiceList = () => {
                 label="Sort By"
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiSelect-select': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: '#94a3b8',
+                  },
+                }}
               >
                 <MenuItem value="createdAt">Created Date</MenuItem>
                 <MenuItem value="dueDate">Due Date</MenuItem>
@@ -297,6 +376,32 @@ const InvoiceList = () => {
                 label="Order"
                 value={sortOrder}
                 onChange={(e) => setSortOrder(e.target.value)}
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiSelect-select': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiSvgIcon-root': {
+                    color: '#94a3b8',
+                  },
+                }}
               >
                 <MenuItem value="desc">Newest First</MenuItem>
                 <MenuItem value="asc">Oldest First</MenuItem>
@@ -307,7 +412,25 @@ const InvoiceList = () => {
       </Card>
 
       {/* Invoice Table */}
-      <Card>
+      <Card 
+        sx={{
+          background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+          border: '1px solid rgba(148, 163, 184, 0.2)',
+          borderRadius: 3,
+          backdropFilter: 'blur(20px)',
+          boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+          position: 'relative',
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: '1px',
+            background: 'linear-gradient(90deg, transparent, rgba(59, 130, 246, 0.5), transparent)',
+          }
+        }}
+      >
         <CardContent>
           {loading ? (
             <Box display="flex" justifyContent="center" p={3}>
@@ -325,53 +448,60 @@ const InvoiceList = () => {
               <Table>
                 <TableHead>
                   <TableRow>
-                    <TableCell>ID</TableCell>
-                    <TableCell>Recipient</TableCell>
-                    <TableCell>Amount</TableCell>
-                    <TableCell>Status</TableCell>
-                    <TableCell>Created</TableCell>
-                    <TableCell>Due Date</TableCell>
-                    <TableCell>Actions</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>ID</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>Recipient</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>Amount</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>Status</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>Created</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>Due Date</TableCell>
+                    <TableCell sx={{ color: '#f8fafc', fontWeight: 600 }}>Actions</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {filteredInvoices.map((invoice) => (
-                    <TableRow key={invoice.id} hover>
-                      <TableCell>
-                        <Typography variant="subtitle2">
+                    <TableRow key={invoice.id} hover sx={{ '&:hover': { bgcolor: 'rgba(59, 130, 246, 0.1)' } }}>
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
+                        <Typography variant="subtitle2" sx={{ color: '#f8fafc', fontWeight: 600 }}>
                           #{invoice.id}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
                         <Tooltip title={invoice.recipient}>
-                          <Typography variant="body2">
+                          <Typography variant="body2" sx={{ color: '#94a3b8', fontFamily: 'monospace' }}>
                             {formatAddress(invoice.recipient)}
                           </Typography>
                         </Tooltip>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
+                        <Typography variant="body2" sx={{ color: '#22c55e', fontWeight: 600 }}>
                           {formatAmount(invoice.amount)} ETH
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
                         {getStatusBadge(invoice.status)}
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
+                        <Typography variant="body2" sx={{ color: '#94a3b8' }}>
                           {new Date(invoice.createdAt).toLocaleDateString()}
                         </Typography>
                       </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
+                        <Typography variant="body2" sx={{ color: '#94a3b8' }}>
                           {new Date(invoice.dueDate).toLocaleDateString()}
                         </Typography>
                       </TableCell>
-                      <TableCell>
+                      <TableCell sx={{ borderColor: 'rgba(148, 163, 184, 0.2)' }}>
                         <Tooltip title="View Details">
                           <IconButton
                             size="small"
                             onClick={() => handleViewInvoice(invoice.id)}
+                            sx={{ 
+                              color: '#94a3b8',
+                              '&:hover': { 
+                                color: '#3b82f6',
+                                bgcolor: 'rgba(59, 130, 246, 0.1)' 
+                              }
+                            }}
                           >
                             <Visibility />
                           </IconButton>
@@ -388,9 +518,18 @@ const InvoiceList = () => {
 
       {/* Summary */}
       {filteredInvoices.length > 0 && (
-        <Card sx={{ mt: 2 }}>
+        <Card 
+          sx={{ 
+            mt: 2,
+            background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.95) 0%, rgba(30, 41, 59, 0.95) 100%)',
+            border: '1px solid rgba(148, 163, 184, 0.2)',
+            borderRadius: 3,
+            backdropFilter: 'blur(20px)',
+            boxShadow: '0 25px 50px rgba(0, 0, 0, 0.25)',
+          }}
+        >
           <CardContent>
-            <Typography variant="subtitle2" color="text.secondary">
+            <Typography variant="subtitle2" sx={{ color: '#94a3b8' }}>
               Showing {filteredInvoices.length} of {userInvoices.length} invoices
             </Typography>
           </CardContent>

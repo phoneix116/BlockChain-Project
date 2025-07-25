@@ -5,6 +5,21 @@ const path = require('path');
 
 const router = express.Router();
 
+// Helper function to convert BigInt values to strings/numbers for JSON serialization
+const formatBigIntValues = (obj) => {
+  const formatted = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (typeof value === 'bigint') {
+      formatted[key] = value.toString();
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      formatted[key] = formatBigIntValues(value);
+    } else {
+      formatted[key] = value;
+    }
+  }
+  return formatted;
+};
+
 // Contract ABI - This will be updated after deployment
 let contractABI = [];
 let contractAddress = '';
@@ -119,7 +134,7 @@ router.get('/invoice/:id', async (req, res) => {
     const contract = getContract();
     const invoice = await contract.getInvoice(id);
     
-    // Format invoice data
+    // Format invoice data - convert all BigInt to strings/numbers
     const formattedInvoice = {
       id: invoice.id.toString(),
       ipfsHash: invoice.ipfsHash,
@@ -127,10 +142,10 @@ router.get('/invoice/:id', async (req, res) => {
       recipient: invoice.recipient,
       amount: invoice.amount.toString(),
       tokenAddress: invoice.tokenAddress,
-      status: invoice.status,
-      createdAt: new Date(invoice.createdAt.toNumber() * 1000).toISOString(),
-      dueDate: new Date(invoice.dueDate.toNumber() * 1000).toISOString(),
-      paidAt: invoice.paidAt.toNumber() > 0 ? new Date(invoice.paidAt.toNumber() * 1000).toISOString() : null,
+      status: Number(invoice.status),
+      createdAt: new Date(Number(invoice.createdAt) * 1000).toISOString(),
+      dueDate: new Date(Number(invoice.dueDate) * 1000).toISOString(),
+      paidAt: Number(invoice.paidAt) > 0 ? new Date(Number(invoice.paidAt) * 1000).toISOString() : null,
       description: invoice.description
     };
 
@@ -161,7 +176,27 @@ router.get('/user/:address/invoices', async (req, res) => {
     }
 
     const contract = getContract();
-    const invoiceIds = await contract.getUserInvoices(address);
+    
+    let invoiceIds;
+    try {
+      invoiceIds = await contract.getUserInvoices(address);
+    } catch (error) {
+      // Handle empty result or decode errors
+      if (error.code === 'BAD_DATA' || error.value === '0x') {
+        invoiceIds = [];
+      } else {
+        throw error;
+      }
+    }
+    
+    // Handle empty array case
+    if (!invoiceIds || invoiceIds.length === 0) {
+      return res.json({
+        success: true,
+        invoices: [],
+        count: 0
+      });
+    }
     
     // Get full invoice details for each ID
     const invoices = await Promise.all(
@@ -175,10 +210,10 @@ router.get('/user/:address/invoices', async (req, res) => {
             recipient: invoice.recipient,
             amount: invoice.amount.toString(),
             tokenAddress: invoice.tokenAddress,
-            status: invoice.status,
-            createdAt: new Date(invoice.createdAt.toNumber() * 1000).toISOString(),
-            dueDate: new Date(invoice.dueDate.toNumber() * 1000).toISOString(),
-            paidAt: invoice.paidAt.toNumber() > 0 ? new Date(invoice.paidAt.toNumber() * 1000).toISOString() : null,
+            status: Number(invoice.status),
+            createdAt: new Date(Number(invoice.createdAt) * 1000).toISOString(),
+            dueDate: new Date(Number(invoice.dueDate) * 1000).toISOString(),
+            paidAt: Number(invoice.paidAt) > 0 ? new Date(Number(invoice.paidAt) * 1000).toISOString() : null,
             description: invoice.description
           };
         } catch (error) {
@@ -242,10 +277,10 @@ router.get('/invoices/status/:status', async (req, res) => {
       recipient: invoice.recipient,
       amount: invoice.amount.toString(),
       tokenAddress: invoice.tokenAddress,
-      status: invoice.status,
-      createdAt: new Date(invoice.createdAt.toNumber() * 1000).toISOString(),
-      dueDate: new Date(invoice.dueDate.toNumber() * 1000).toISOString(),
-      paidAt: invoice.paidAt.toNumber() > 0 ? new Date(invoice.paidAt.toNumber() * 1000).toISOString() : null,
+      status: Number(invoice.status),
+      createdAt: new Date(Number(invoice.createdAt) * 1000).toISOString(),
+      dueDate: new Date(Number(invoice.dueDate) * 1000).toISOString(),
+      paidAt: Number(invoice.paidAt) > 0 ? new Date(Number(invoice.paidAt) * 1000).toISOString() : null,
       description: invoice.description
     }));
 
@@ -295,9 +330,9 @@ router.get('/dispute/:invoiceId', async (req, res) => {
       invoiceId: dispute.invoiceId.toString(),
       initiator: dispute.initiator,
       reason: dispute.reason,
-      status: dispute.status,
-      createdAt: new Date(dispute.createdAt.toNumber() * 1000).toISOString(),
-      resolvedAt: dispute.resolvedAt.toNumber() > 0 ? new Date(dispute.resolvedAt.toNumber() * 1000).toISOString() : null,
+      status: Number(dispute.status),
+      createdAt: new Date(Number(dispute.createdAt) * 1000).toISOString(),
+      resolvedAt: Number(dispute.resolvedAt) > 0 ? new Date(Number(dispute.resolvedAt) * 1000).toISOString() : null,
       resolver: dispute.resolver !== ethers.ZeroAddress ? dispute.resolver : null
     };
 

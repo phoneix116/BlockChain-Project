@@ -4,6 +4,8 @@ const axios = require('axios');
 const FormData = require('form-data');
 const Joi = require('joi');
 const pdfParse = require('pdf-parse');
+const path = require('path');
+const fs = require('fs');
 
 const router = express.Router();
 
@@ -113,8 +115,6 @@ async function uploadToWeb3Storage(fileBuffer, metadata) {
 
 // Development fallback: Mock IPFS storage
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 
 async function uploadToMockIPFS(fileBuffer, metadata) {
   try {
@@ -415,30 +415,93 @@ router.get('/pins', async (req, res) => {
   }
 });
 
-// Serve locally stored files for development
-router.get('/file/:hash', (req, res) => {
+// Serve files from IPFS - check local first, then Pinata gateway
+router.get('/file/:hash', async (req, res) => {
   try {
     const { hash } = req.params;
     const uploadsDir = path.join(__dirname, '../uploads');
     const filePath = path.join(uploadsDir, `${hash}.pdf`);
     const metadataPath = path.join(uploadsDir, `${hash}.json`);
     
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({
-        error: 'File not found',
-        message: 'The requested IPFS file was not found in local storage'
+    // Try local file first
+    if (fs.existsSync(filePath)) {
+      // Read metadata if available
+      let metadata = {};
+      if (fs.existsSync(metadataPath)) {
+        try {
+          metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+        } catch (err) {
+          console.warn('Failed to read metadata file:', err);
+        }
+      }
+      
+      // Get file stats for content length
+      const stats = fs.statSync(filePath);
+      
+      // Set proper headers for PDF download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Length', stats.size);
+      res.setHeader('Content-Disposition', `inline; filename="${metadata.filename || `invoice-${hash}.pdf`}"`);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
+      // Create read stream and pipe to response
+      const fileStream = fs.createReadStream(filePath);
+      fileStream.on('error', (err) => {
+        console.error('File stream error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: 'Failed to read file',
+            message: err.message
+          });
+        }
       });
+      
+      fileStream.pipe(res);
+      return;
     }
     
-    // Read metadata if available
-    let metadata = {};
-    if (fs.existsSync(metadataPath)) {
-      metadata = JSON.parse(fs.readFileSync(metadataPath, 'utf8'));
+    // If not found locally, try to fetch from Pinata gateway
+    if (process.env.IPFS_GATEWAY) {
+      console.log(`📥 Fetching file from Pinata gateway: ${hash}`);
+      
+      const gatewayUrl = `${process.env.IPFS_GATEWAY}${hash}`;
+      const axios = require('axios');
+      
+      try {
+        const response = await axios.get(gatewayUrl, {
+          responseType: 'stream',
+          timeout: 30000
+        });
+        
+        // Set proper headers for PDF download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `inline; filename="invoice-${hash}.pdf"`);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+        res.setHeader('Pragma', 'no-cache');
+        res.setHeader('Expires', '0');
+        
+        // Pipe the Pinata response directly to our response
+        response.data.pipe(res);
+        return;
+        
+      } catch (gatewayError) {
+        console.error('Pinata gateway fetch error:', gatewayError.message);
+      }
     }
     
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${metadata.filename || 'invoice.pdf'}"`);
-    res.sendFile(filePath);
+    // File not found anywhere
+    return res.status(404).json({
+      error: 'File not found',
+      message: 'The requested IPFS file was not found in local storage or IPFS gateway'
+    });
     
   } catch (error) {
     console.error('File serve error:', error);

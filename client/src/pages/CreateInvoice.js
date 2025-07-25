@@ -15,17 +15,16 @@ import {
   StepLabel,
   Divider,
 } from '@mui/material';
-import { Upload, Receipt, Send } from '@mui/icons-material';
-import { useDropzone } from 'react-dropzone';
+import { Receipt, Send } from '@mui/icons-material';
 import { toast } from 'react-toastify';
 import { useNavigate } from 'react-router-dom';
 import { ethers } from 'ethers';
 
 import { useWallet } from '../contexts/WalletContext';
 import { useInvoice } from '../contexts/InvoiceContext';
-import ipfsAPI from '../services/ipfsAPI';
+import invoiceAPI from '../services/invoiceAPI';
 
-const steps = ['Invoice Details', 'Upload PDF', 'Review & Submit'];
+const steps = ['Invoice Details', 'Preview & Submit'];
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
@@ -40,33 +39,10 @@ const CreateInvoice = () => {
     amount: '',
     tokenAddress: '',
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
-    file: null,
   });
   const [errors, setErrors] = useState({});
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: {
-      'application/pdf': ['.pdf']
-    },
-    maxFiles: 1,
-    maxSize: 10 * 1024 * 1024, // 10MB
-    onDrop: (acceptedFiles) => {
-      if (acceptedFiles.length > 0) {
-        setFormData(prev => ({ ...prev, file: acceptedFiles[0] }));
-        setErrors(prev => ({ ...prev, file: null }));
-      }
-    },
-    onDropRejected: (rejectedFiles) => {
-      const error = rejectedFiles[0]?.errors[0];
-      if (error?.code === 'file-too-large') {
-        setErrors(prev => ({ ...prev, file: 'File size must be less than 10MB' }));
-      } else if (error?.code === 'file-invalid-type') {
-        setErrors(prev => ({ ...prev, file: 'Only PDF files are allowed' }));
-      } else {
-        setErrors(prev => ({ ...prev, file: 'Invalid file' }));
-      }
-    }
-  });
+  const [pdfBlob, setPdfBlob] = useState(null);
+  const [generatingPDF, setGeneratingPDF] = useState(false);
 
   const handleInputChange = (field) => (event) => {
     setFormData(prev => ({ ...prev, [field]: event.target.value }));
@@ -97,18 +73,30 @@ const CreateInvoice = () => {
       }
     }
 
-    if (step === 1) {
-      if (!formData.file) {
-        newErrors.file = 'PDF file is required';
-      }
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  const generatePDFPreview = async () => {
+    if (!validateStep(0)) return;
+
+    try {
+      setGeneratingPDF(true);
+      const blob = await invoiceAPI.previewInvoicePDF(formData);
+      setPdfBlob(blob);
+      setActiveStep(1);
+    } catch (error) {
+      console.error('Failed to generate PDF preview:', error);
+      toast.error('Failed to generate PDF preview');
+    } finally {
+      setGeneratingPDF(false);
+    }
+  };
+
   const handleNext = () => {
-    if (validateStep(activeStep)) {
+    if (activeStep === 0) {
+      generatePDFPreview();
+    } else if (validateStep(activeStep)) {
       setActiveStep(prev => prev + 1);
     }
   };
@@ -118,21 +106,39 @@ const CreateInvoice = () => {
   };
 
   const handleSubmit = async () => {
-    if (!validateStep(1)) return; // Validate file again
-
     try {
-      const result = await createInvoice(formData);
+      // Generate invoice with automatic PDF creation and IPFS upload
+      const result = await invoiceAPI.generateInvoice(formData);
+      
+      console.log('Generated invoice result:', result);
+      
+      // Access IPFS hash from nested data structure
+      const ipfsHash = result.data?.ipfsHash || result.ipfsHash;
+      
+      if (!ipfsHash) {
+        throw new Error('No IPFS hash received from PDF generation');
+      }
+      
+      // Use the generated IPFS hash to create the blockchain invoice
+      const invoiceData = {
+        ...formData,
+        ipfsHash: ipfsHash
+      };
+      
+      const blockchainResult = await createInvoice(invoiceData);
       
       toast.success(
         <div>
           <div>Invoice created successfully!</div>
-          <div>Invoice ID: {result.invoiceId}</div>
+          <div>Invoice ID: {blockchainResult.invoiceId}</div>
+          <div>PDF stored on IPFS: {ipfsHash}</div>
         </div>
       );
       
-      navigate(`/invoice/${result.invoiceId}`);
+      navigate(`/invoice/${blockchainResult.invoiceId}`);
     } catch (error) {
       console.error('Failed to create invoice:', error);
+      toast.error('Failed to create invoice: ' + error.message);
     }
   };
 
@@ -403,88 +409,17 @@ const CreateInvoice = () => {
       case 1:
         return (
           <Box>
-            <Paper
-              {...getRootProps()}
-              sx={{
-                p: 4,
-                border: '2px dashed',
-                borderColor: isDragActive ? '#3b82f6' : 'rgba(148, 163, 184, 0.3)',
-                bgcolor: isDragActive ? 'rgba(59, 130, 246, 0.1)' : 'rgba(15, 23, 42, 0.8)',
-                cursor: 'pointer',
-                textAlign: 'center',
-                borderRadius: 2,
-                transition: 'all 0.3s ease',
-                '&:hover': {
-                  bgcolor: 'rgba(59, 130, 246, 0.05)',
-                  borderColor: 'rgba(59, 130, 246, 0.5)',
-                },
-              }}
-            >
-              <input {...getInputProps()} />
-              <Upload sx={{ fontSize: 48, color: '#94a3b8', mb: 2 }} />
-              <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600 }}>
-                {isDragActive ? 'Drop the PDF here' : 'Upload Invoice PDF'}
-              </Typography>
-              <Typography variant="body2" sx={{ color: '#94a3b8' }}>
-                Drag & drop a PDF file here, or click to select
-              </Typography>
-              <Typography variant="caption" display="block" mt={1} sx={{ color: '#64748b' }}>
-                Maximum file size: 10MB
-              </Typography>
-            </Paper>
-
-            {formData.file && (
-              <Alert 
-                severity="success" 
-                sx={{ 
-                  mt: 2,
-                  bgcolor: 'rgba(34, 197, 94, 0.1)',
-                  border: '1px solid rgba(34, 197, 94, 0.2)',
-                  color: '#22c55e',
-                  '& .MuiAlert-icon': {
-                    color: '#22c55e'
-                  }
-                }}
-              >
-                File selected: {formData.file.name} ({(formData.file.size / 1024 / 1024).toFixed(2)} MB)
-              </Alert>
-            )}
-
-            {errors.file && (
-              <Alert 
-                severity="error" 
-                sx={{ 
-                  mt: 2,
-                  bgcolor: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.2)',
-                  color: '#ef4444',
-                  '& .MuiAlert-icon': {
-                    color: '#ef4444'
-                  }
-                }}
-              >
-                {errors.file}
-              </Alert>
-            )}
-          </Box>
-        );
-
-      case 2:
-        return (
-          <Box>
             <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600, mb: 3 }}>
-              Review Invoice Details
+              Review Invoice Details & PDF Preview
             </Typography>
+            
             <Grid container spacing={3}>
               <Grid item xs={12} sm={6}>
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}
-                >
+                <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600, mb: 2 }}>
+                  Invoice Details
+                </Typography>
+                
+                <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
                     Title
                   </Typography>
@@ -492,91 +427,105 @@ const CreateInvoice = () => {
                     {formData.title}
                   </Typography>
                 </Box>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}
-                >
-                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
-                    Amount
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: '#22c55e', fontWeight: 600, fontSize: '1.1rem' }}>
-                    {formData.amount} ETH
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}
-                >
+
+                <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
                     Recipient
                   </Typography>
-                  <Typography variant="body1" sx={{ color: '#f8fafc', wordBreak: 'break-all', fontFamily: 'monospace' }}>
+                  <Typography variant="body1" sx={{ color: '#f8fafc', fontFamily: 'monospace' }}>
                     {formData.recipient}
                   </Typography>
                 </Box>
-              </Grid>
-              <Grid item xs={12} sm={6}>
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}
-                >
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Amount
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#f8fafc', fontWeight: 500 }}>
+                    {formData.amount} ETH
+                  </Typography>
+                </Box>
+
+                <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
                     Due Date
                   </Typography>
-                  <Typography variant="body1" sx={{ color: '#f8fafc', fontWeight: 500 }}>
-                    {formData.dueDate.toLocaleDateString()}
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid item xs={12}>
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}
-                >
-                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
-                    Description
-                  </Typography>
                   <Typography variant="body1" sx={{ color: '#f8fafc' }}>
-                    {formData.description || 'No description provided'}
+                    {new Date(formData.dueDate).toLocaleDateString()}
                   </Typography>
                 </Box>
+
+                {formData.description && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                      Description
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: '#f8fafc' }}>
+                      {formData.description}
+                    </Typography>
+                  </Box>
+                )}
               </Grid>
-              <Grid item xs={12}>
-                <Box 
-                  sx={{ 
-                    p: 2, 
-                    bgcolor: 'rgba(15, 23, 42, 0.8)', 
-                    borderRadius: 2,
-                    border: '1px solid rgba(148, 163, 184, 0.2)'
-                  }}
-                >
-                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
-                    PDF File
-                  </Typography>
-                  <Typography variant="body1" sx={{ color: '#3b82f6', fontWeight: 500 }}>
-                    {formData.file?.name} ({(formData.file?.size / 1024 / 1024).toFixed(2)} MB)
-                  </Typography>
-                </Box>
+
+              <Grid item xs={12} sm={6}>
+                <Typography variant="h6" gutterBottom sx={{ color: '#f8fafc', fontWeight: 600, mb: 2 }}>
+                  PDF Preview
+                </Typography>
+                
+                {pdfBlob ? (
+                  <Box>
+                    <Paper
+                      sx={{
+                        p: 2,
+                        bgcolor: 'rgba(15, 23, 42, 0.8)',
+                        border: '1px solid rgba(148, 163, 184, 0.2)',
+                        borderRadius: 2,
+                        textAlign: 'center'
+                      }}
+                    >
+                      <Receipt sx={{ fontSize: 48, color: '#22c55e', mb: 1 }} />
+                      <Typography variant="body1" sx={{ color: '#f8fafc', mb: 2 }}>
+                        PDF Generated Successfully
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: '#94a3b8', mb: 2 }}>
+                        Size: {(pdfBlob.size / 1024).toFixed(1)} KB
+                      </Typography>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        onClick={() => {
+                          const url = URL.createObjectURL(pdfBlob);
+                          window.open(url, '_blank');
+                          URL.revokeObjectURL(url);
+                        }}
+                        sx={{
+                          borderColor: '#3b82f6',
+                          color: '#3b82f6',
+                          '&:hover': {
+                            borderColor: '#2563eb',
+                            bgcolor: 'rgba(59, 130, 246, 0.1)'
+                          }
+                        }}
+                      >
+                        Preview PDF
+                      </Button>
+                    </Paper>
+                  </Box>
+                ) : (
+                  <Alert
+                    severity="info"
+                    sx={{
+                      bgcolor: 'rgba(59, 130, 246, 0.1)',
+                      border: '1px solid rgba(59, 130, 246, 0.2)',
+                      color: '#3b82f6',
+                      '& .MuiAlert-icon': {
+                        color: '#3b82f6'
+                      }
+                    }}
+                  >
+                    PDF will be generated automatically when you proceed to the next step.
+                  </Alert>
+                )}
               </Grid>
             </Grid>
           </Box>
@@ -706,7 +655,8 @@ const CreateInvoice = () => {
               <Button
                 variant="contained"
                 onClick={handleNext}
-                startIcon={<Receipt />}
+                disabled={generatingPDF}
+                startIcon={generatingPDF ? <CircularProgress size={20} /> : <Receipt />}
                 sx={{
                   bgcolor: 'rgba(59, 130, 246, 0.9)',
                   '&:hover': { bgcolor: '#3b82f6' },
@@ -714,7 +664,7 @@ const CreateInvoice = () => {
                   textTransform: 'none'
                 }}
               >
-                Next
+                {generatingPDF ? 'Generating PDF...' : 'Generate PDF & Continue'}
               </Button>
             )}
           </Box>
