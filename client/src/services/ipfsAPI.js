@@ -58,23 +58,46 @@ const ipfsAPI = {
     return `${gateway}${hash}`;
   },
 
-  // Download file from IPFS
+  // Download file from IPFS - Direct Pinata gateway access
   downloadFile: async (hash) => {
-    // Use Pinata gateway if available, otherwise local backend
-    const gatewayUrl = process.env.REACT_APP_IPFS_GATEWAY || 'http://localhost:3001/api/ipfs/file/';
-    const url = gatewayUrl.includes('gateway.pinata.cloud') 
-      ? `${gatewayUrl}${hash}`
-      : `${API_BASE_URL}/api/ipfs/file/${hash}`;
-      
+    // Primary: Use Pinata gateway directly
+    const pinataGateway = process.env.REACT_APP_IPFS_GATEWAY || 'https://cyan-glamorous-tarsier-110.mypinata.cloud/ipfs/';
+    const directUrl = `${pinataGateway}${hash}`;
+    
     try {
-      const response = await fetch(url);
+      console.log('Downloading from Pinata gateway:', directUrl);
+      const response = await fetch(directUrl, {
+        method: 'GET',
+        headers: {
+          'Accept': 'application/pdf, application/octet-stream',
+        },
+      });
+      
       if (!response.ok) {
-        throw new Error('Failed to download file');
+        throw new Error(`Pinata gateway failed: ${response.status}`);
       }
-      return response.blob();
+      
+      const blob = await response.blob();
+      console.log('Downloaded from Pinata - Size:', blob.size, 'Type:', blob.type);
+      return blob;
+      
     } catch (error) {
-      console.error('Download error:', error);
-      throw error;
+      console.error('Pinata download failed, trying backend fallback:', error);
+      
+      // Fallback: Use backend API
+      try {
+        const fallbackUrl = `${API_BASE_URL}/api/ipfs/file/${hash}`;
+        const response = await fetch(fallbackUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Backend fallback failed: ${response.status}`);
+        }
+        
+        return response.blob();
+      } catch (fallbackError) {
+        console.error('Both Pinata and backend download failed:', fallbackError);
+        throw new Error('Failed to download file from IPFS');
+      }
     }
   },
 

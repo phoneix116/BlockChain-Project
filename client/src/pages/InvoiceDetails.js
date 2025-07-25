@@ -48,19 +48,31 @@ const InvoiceDetails = () => {
   const handleDownloadPDF = async () => {
     if (invoice?.ipfsHash) {
       try {
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/ipfs/file/${invoice.ipfsHash}`);
+        // Download directly from Pinata gateway
+        const pinataGateway = process.env.REACT_APP_IPFS_GATEWAY || 'https://cyan-glamorous-tarsier-110.mypinata.cloud/ipfs/';
+        const directUrl = `${pinataGateway}${invoice.ipfsHash}`;
+        
+        console.log('Downloading PDF from Pinata:', directUrl);
+        
+        const response = await fetch(directUrl, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/pdf',
+          },
+        });
         
         if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`);
+          throw new Error(`Failed to download from Pinata: ${response.status}`);
         }
         
         const blob = await response.blob();
         
         // Verify it's a PDF
-        if (blob.type !== 'application/pdf') {
-          console.warn('Downloaded file is not a PDF:', blob.type);
+        if (blob.type !== 'application/pdf' && !blob.type.includes('pdf')) {
+          console.warn('Downloaded file type:', blob.type, 'Size:', blob.size);
         }
         
+        // Create download link
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -71,10 +83,35 @@ const InvoiceDetails = () => {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
         
-        console.log('PDF download successful');
+        console.log('PDF download successful from Pinata');
       } catch (error) {
-        console.error('Download failed:', error);
-        alert('Failed to download PDF. Please try again.');
+        console.error('Pinata download failed:', error);
+        
+        // Fallback to backend API
+        try {
+          console.log('Trying fallback download via backend...');
+          const fallbackResponse = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:3001'}/api/ipfs/file/${invoice.ipfsHash}`);
+          
+          if (!fallbackResponse.ok) {
+            throw new Error(`Backend fallback failed: ${fallbackResponse.status}`);
+          }
+          
+          const blob = await fallbackResponse.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `invoice-${id}.pdf`;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+          
+          console.log('PDF download successful via backend fallback');
+        } catch (fallbackError) {
+          console.error('Both Pinata and backend download failed:', fallbackError);
+          alert('Failed to download PDF. Please try again later.');
+        }
       }
     } else {
       alert('PDF file not available for this invoice.');
