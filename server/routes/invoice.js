@@ -7,31 +7,79 @@ const path = require('path');
 const FormData = require('form-data');
 const axios = require('axios');
 
-const router = express.Router();
+// Import MongoDB models
+const User = require('../models/User');
+const Invoice = require('../models/Invoice');
+const Template = require('../models/Template');
 
-// In-memory storage for demo purposes
-// In production, use a proper database like MongoDB, PostgreSQL, etc.
-const invoiceStore = new Map();
+const router = express.Router();
 
 // Validation schemas
 const invoiceMetadataSchema = Joi.object({
   invoiceId: Joi.string().required(),
-  title: Joi.string().min(1).max(100).required(),
+  walletAddress: Joi.string().required(), // User's wallet address
+  title: Joi.string().min(1).max(200).required(),
+  description: Joi.string().max(1000).optional(),
+  amount: Joi.number().positive().required(),
+  currency: Joi.string().valid('ETH', 'USD', 'EUR', 'GBP', 'USDC', 'DAI').default('ETH'),
+  dueDate: Joi.date().iso().required(),
   issuerName: Joi.string().max(100).optional(),
+  issuerEmail: Joi.string().email().optional(),
   recipientName: Joi.string().max(100).optional(),
-  notes: Joi.string().max(1000).optional(),
+  recipientEmail: Joi.string().email().optional(),
+  recipientWallet: Joi.string().required(),
+  notes: Joi.string().max(1000).optional().allow(''),
   category: Joi.string().max(50).optional(),
   tags: Joi.array().items(Joi.string().max(30)).max(10).optional()
 });
 
 const templateSchema = Joi.object({
-  name: Joi.string().min(1).max(50).required(),
+  name: Joi.string().min(1).max(100).required(),
   description: Joi.string().max(500).optional(),
+  category: Joi.string().valid('services', 'products', 'consulting', 'development', 'design', 'other').default('other'),
   fields: Joi.object().required(),
-  isPublic: Joi.boolean().optional().default(false)
+  isPublic: Joi.boolean().optional().default(false),
+  walletAddress: Joi.string().required()
 });
 
-// Store additional invoice metadata
+const userSchema = Joi.object({
+  walletAddress: Joi.string().required(),
+  email: Joi.string().email().optional(),
+  name: Joi.string().max(100).optional(),
+  company: Joi.string().max(100).optional(),
+  preferences: Joi.object({
+    theme: Joi.string().valid('light', 'dark').default('dark'),
+    notifications: Joi.boolean().default(true),
+    defaultCurrency: Joi.string().valid('ETH', 'USD', 'EUR', 'GBP').default('ETH'),
+    timezone: Joi.string().default('UTC')
+  }).optional()
+});
+
+// Helper function to get or create user
+async function getOrCreateUser(walletAddress, userData = {}) {
+  try {
+    let user = await User.findByWallet(walletAddress);
+    
+    if (!user) {
+      user = new User({
+        walletAddress: walletAddress.toLowerCase(),
+        ...userData
+      });
+      await user.save();
+      console.log(`✅ Created new user: ${walletAddress}`);
+    } else {
+      // Update last active
+      await user.updateLastActive();
+    }
+    
+    return user;
+  } catch (error) {
+    console.error('Error getting/creating user:', error);
+    throw error;
+  }
+}
+
+// Store invoice metadata in MongoDB
 router.post('/metadata', async (req, res) => {
   try {
     const { error, value } = invoiceMetadataSchema.validate(req.body);
@@ -43,21 +91,56 @@ router.post('/metadata', async (req, res) => {
       });
     }
 
-    const { invoiceId } = value;
+    const { invoiceId, walletAddress, recipientWallet, ...invoiceData } = value;
     
-    // Store metadata
-    const metadata = {
-      ...value,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    // Get or create user
+    const user = await getOrCreateUser(walletAddress);
     
-    invoiceStore.set(`metadata_${invoiceId}`, metadata);
+    // Check if invoice already exists
+    const existingInvoice = await Invoice.findOne({ invoiceId });
+    if (existingInvoice) {
+      return res.status(409).json({
+        error: 'Invoice already exists',
+        message: 'An invoice with this ID already exists'
+      });
+    }
+    
+    // Create new invoice
+    const invoice = new Invoice({
+      invoiceId,
+      userId: user._id,
+      ...invoiceData,
+      issuer: {
+        name: invoiceData.issuerName,
+        email: invoiceData.issuerEmail,
+        walletAddress: walletAddress.toLowerCase()
+      },
+      recipient: {
+        name: invoiceData.recipientName,
+        email: invoiceData.recipientEmail,
+        walletAddress: recipientWallet.toLowerCase()
+      },
+      status: 'draft'
+    });
+    
+    await invoice.save();
+    
+    // Update user stats
+    user.stats.totalInvoices += 1;
+    await user.save();
 
     res.json({
       success: true,
       message: 'Invoice metadata stored successfully',
-      metadata
+      invoice: {
+        id: invoice._id,
+        invoiceId: invoice.invoiceId,
+        title: invoice.title,
+        amount: invoice.formattedAmount,
+        currency: invoice.currency,
+        status: invoice.status,
+        createdAt: invoice.createdAt
+      }
     });
 
   } catch (error) {
@@ -69,7 +152,7 @@ router.post('/metadata', async (req, res) => {
   }
 });
 
-// Get invoice metadata
+// Get invoice metadata from MongoDB
 router.get('/metadata/:invoiceId', async (req, res) => {
   try {
     const { invoiceId } = req.params;
@@ -81,18 +164,28 @@ router.get('/metadata/:invoiceId', async (req, res) => {
       });
     }
 
-    const metadata = invoiceStore.get(`metadata_${invoiceId}`);
+    const invoice = await Invoice.findOne({ invoiceId })
+      .populate('userId', 'walletAddress name company')
+      .lean();
     
-    if (!metadata) {
+    if (!invoice) {
       return res.status(404).json({
-        error: 'Metadata not found',
-        message: 'No metadata found for this invoice'
+        error: 'Invoice not found',
+        message: 'No invoice found with this ID'
       });
     }
 
+    // Format response
+    const formattedInvoice = {
+      ...invoice,
+      formattedAmount: parseFloat(invoice.amount.toString()).toFixed(4),
+      daysUntilDue: invoice.dueDate ? Math.ceil((new Date(invoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null,
+      isOverdue: invoice.status === 'pending' && invoice.dueDate && new Date() > new Date(invoice.dueDate)
+    };
+
     res.json({
       success: true,
-      metadata
+      invoice: formattedInvoice
     });
 
   } catch (error) {
@@ -104,58 +197,109 @@ router.get('/metadata/:invoiceId', async (req, res) => {
   }
 });
 
-// Search invoices by metadata
+// Search invoices in MongoDB
 router.get('/search', async (req, res) => {
   try {
-    const { query, category, tag, limit = 20, offset = 0 } = req.query;
+    const { 
+      query, 
+      walletAddress,
+      category, 
+      tag, 
+      status,
+      minAmount,
+      maxAmount,
+      startDate,
+      endDate,
+      limit = 20, 
+      offset = 0,
+      sortBy = 'createdAt',
+      sortOrder = 'desc'
+    } = req.query;
     
-    const allMetadata = Array.from(invoiceStore.entries())
-      .filter(([key]) => key.startsWith('metadata_'))
-      .map(([key, value]) => value);
-
-    let results = allMetadata;
-
-    // Filter by search query
-    if (query) {
-      const searchLower = query.toLowerCase();
-      results = results.filter(metadata => 
-        metadata.title.toLowerCase().includes(searchLower) ||
-        metadata.notes?.toLowerCase().includes(searchLower) ||
-        metadata.issuerName?.toLowerCase().includes(searchLower) ||
-        metadata.recipientName?.toLowerCase().includes(searchLower)
-      );
+    // Build MongoDB query
+    const searchQuery = {};
+    
+    // Filter by wallet address (user's invoices)
+    if (walletAddress) {
+      const user = await User.findByWallet(walletAddress);
+      if (user) {
+        searchQuery.userId = user._id;
+      } else {
+        return res.json({ success: true, invoices: [], total: 0 });
+      }
     }
-
+    
+    // Text search across multiple fields
+    if (query) {
+      searchQuery.$or = [
+        { title: { $regex: query, $options: 'i' } },
+        { description: { $regex: query, $options: 'i' } },
+        { 'issuer.name': { $regex: query, $options: 'i' } },
+        { 'recipient.name': { $regex: query, $options: 'i' } },
+        { notes: { $regex: query, $options: 'i' } }
+      ];
+    }
+    
     // Filter by category
     if (category) {
-      results = results.filter(metadata => 
-        metadata.category?.toLowerCase() === category.toLowerCase()
-      );
+      searchQuery.category = category;
     }
-
+    
     // Filter by tag
     if (tag) {
-      results = results.filter(metadata => 
-        metadata.tags?.some(t => t.toLowerCase() === tag.toLowerCase())
-      );
+      searchQuery.tags = { $in: [tag] };
     }
-
-    // Sort by creation date (newest first)
-    results.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-
-    // Apply pagination
-    const startIndex = parseInt(offset);
-    const endIndex = startIndex + parseInt(limit);
-    const paginatedResults = results.slice(startIndex, endIndex);
+    
+    // Filter by status
+    if (status) {
+      searchQuery.status = status;
+    }
+    
+    // Filter by amount range
+    if (minAmount || maxAmount) {
+      searchQuery.amount = {};
+      if (minAmount) searchQuery.amount.$gte = parseFloat(minAmount);
+      if (maxAmount) searchQuery.amount.$lte = parseFloat(maxAmount);
+    }
+    
+    // Filter by date range
+    if (startDate || endDate) {
+      searchQuery.createdAt = {};
+      if (startDate) searchQuery.createdAt.$gte = new Date(startDate);
+      if (endDate) searchQuery.createdAt.$lte = new Date(endDate);
+    }
+    
+    // Build sort object
+    const sortObject = {};
+    sortObject[sortBy] = sortOrder === 'desc' ? -1 : 1;
+    
+    // Execute search with pagination
+    const [invoices, total] = await Promise.all([
+      Invoice.find(searchQuery)
+        .populate('userId', 'walletAddress name company')
+        .sort(sortObject)
+        .skip(parseInt(offset))
+        .limit(parseInt(limit))
+        .lean(),
+      Invoice.countDocuments(searchQuery)
+    ]);
+    
+    // Format results
+    const formattedInvoices = invoices.map(invoice => ({
+      ...invoice,
+      formattedAmount: parseFloat(invoice.amount.toString()).toFixed(4),
+      daysUntilDue: invoice.dueDate ? Math.ceil((new Date(invoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null,
+      isOverdue: invoice.status === 'pending' && invoice.dueDate && new Date() > new Date(invoice.dueDate)
+    }));
 
     res.json({
       success: true,
-      results: paginatedResults,
+      results: formattedInvoices,
       pagination: {
-        total: results.length,
+        total,
         offset: parseInt(offset),
         limit: parseInt(limit),
-        hasMore: endIndex < results.length
+        hasMore: (parseInt(offset) + parseInt(limit)) < total
       }
     });
 
@@ -168,7 +312,7 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// Invoice templates management
+// Create invoice template in MongoDB
 router.post('/templates', async (req, res) => {
   try {
     const { error, value } = templateSchema.validate(req.body);
@@ -180,21 +324,30 @@ router.post('/templates', async (req, res) => {
       });
     }
 
-    const templateId = `template_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const template = {
-      id: templateId,
-      ...value,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      usageCount: 0
-    };
+    const { walletAddress, ...templateData } = value;
+    
+    // Get or create user
+    const user = await getOrCreateUser(walletAddress);
+    
+    // Create new template
+    const template = new Template({
+      userId: user._id,
+      ...templateData
+    });
 
-    invoiceStore.set(templateId, template);
+    await template.save();
 
     res.json({
       success: true,
       message: 'Template created successfully',
-      template
+      template: {
+        id: template._id,
+        name: template.name,
+        description: template.description,
+        category: template.category,
+        isPublic: template.sharing.isPublic,
+        createdAt: template.createdAt
+      }
     });
 
   } catch (error) {
@@ -206,34 +359,70 @@ router.post('/templates', async (req, res) => {
   }
 });
 
-// Get all templates
+// Get templates from MongoDB
 router.get('/templates', async (req, res) => {
   try {
-    const { isPublic } = req.query;
+    const { isPublic, walletAddress, category } = req.query;
     
-    const templates = Array.from(invoiceStore.entries())
-      .filter(([key]) => key.startsWith('template_'))
-      .map(([key, value]) => value);
-
-    let filteredTemplates = templates;
+    let query = { isActive: true };
     
-    // Filter by public/private
-    if (isPublic !== undefined) {
-      const publicOnly = isPublic === 'true';
-      filteredTemplates = templates.filter(template => template.isPublic === publicOnly);
-    }
-
-    // Sort by usage count and creation date
-    filteredTemplates.sort((a, b) => {
-      if (b.usageCount !== a.usageCount) {
-        return b.usageCount - a.usageCount;
+    // Filter by user's templates
+    if (walletAddress) {
+      const user = await User.findByWallet(walletAddress);
+      if (user) {
+        if (isPublic === 'true') {
+          // Get user's templates + public templates
+          query = {
+            $or: [
+              { userId: user._id },
+              { 'sharing.isPublic': true }
+            ],
+            isActive: true
+          };
+        } else {
+          // Get only user's templates
+          query.userId = user._id;
+        }
+      } else if (isPublic === 'true') {
+        // Only public templates for non-users
+        query['sharing.isPublic'] = true;
       }
-      return new Date(b.createdAt) - new Date(a.createdAt);
-    });
+    } else if (isPublic === 'true') {
+      // Only public templates
+      query['sharing.isPublic'] = true;
+    }
+    
+    // Filter by category
+    if (category) {
+      query.category = category;
+    }
+    
+    const templates = await Template.find(query)
+      .populate('userId', 'walletAddress name company')
+      .sort({ 'usage.timesUsed': -1, createdAt: -1 })
+      .lean();
+
+    // Format response
+    const formattedTemplates = templates.map(template => ({
+      id: template._id,
+      name: template.name,
+      description: template.description,
+      category: template.category,
+      fields: template.fields,
+      isPublic: template.sharing.isPublic,
+      isDefault: template.sharing.isDefault,
+      usageCount: template.usage.timesUsed,
+      createdAt: template.createdAt,
+      lastUsed: template.usage.lastUsed,
+      owner: template.userId ? {
+        walletAddress: template.userId.walletAddress,
+        name: template.userId.name
+      } : null
+    }));
 
     res.json({
       success: true,
-      templates: filteredTemplates
+      templates: formattedTemplates
     });
 
   } catch (error) {
@@ -389,24 +578,53 @@ router.get('/export', async (req, res) => {
 
 // Validation schema for invoice generation
 const generateInvoiceSchema = Joi.object({
-  recipient: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required()
+  // Support both old format (single recipient) and new format (separate fields)
+  recipient: Joi.alternatives().try(
+    Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/),
+    Joi.object({
+      name: Joi.string().min(1).max(100).required(),
+      email: Joi.string().email().optional().allow(''),
+      walletAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).required()
+    })
+  ).optional(),
+  
+  // New separate recipient fields
+  recipientName: Joi.string().min(1).max(100).optional(),
+  recipientEmail: Joi.string().email().optional().allow(''),
+  recipientAddress: Joi.string().pattern(/^0x[a-fA-F0-9]{40}$/).optional(),
+  
+  amount: Joi.alternatives().try(
+    Joi.string().required(),
+    Joi.number().positive().required()
+  ).messages({
+    'any.required': 'Amount is required'
+  }),
+  description: Joi.string().min(1).max(500).optional().default('')
     .messages({
-      'string.pattern.base': 'Recipient must be a valid Ethereum address'
-    }),
-  amount: Joi.string().required()
-    .messages({
-      'string.empty': 'Amount is required'
-    }),
-  description: Joi.string().min(1).max(500).required()
-    .messages({
-      'string.empty': 'Description is required',
       'string.max': 'Description cannot exceed 500 characters'
     }),
-  dueDate: Joi.date().iso().min('now').required()
+  dueDate: Joi.date().iso().required()
     .messages({
-      'date.min': 'Due date must be in the future'
+      'date.base': 'Due date must be a valid date'
     }),
-  title: Joi.string().min(1).max(100).optional().default('Blockchain Invoice')
+  title: Joi.string().min(1).max(100).required()
+    .messages({
+      'string.empty': 'Title is required'
+    }),
+  tokenAddress: Joi.string().optional().allow('')
+}).custom((value, helpers) => {
+  // Ensure we have recipient information in some form
+  const hasOldFormat = value.recipient && typeof value.recipient === 'string';
+  const hasNewObjectFormat = value.recipient && typeof value.recipient === 'object';
+  const hasNewFieldsFormat = value.recipientName && value.recipientAddress;
+  
+  if (!hasOldFormat && !hasNewObjectFormat && !hasNewFieldsFormat) {
+    return helpers.error('custom.missingRecipient');
+  }
+  
+  return value;
+}, 'Recipient validation').messages({
+  'custom.missingRecipient': 'Recipient information is required (either recipient field or recipientName + recipientAddress)'
 });
 
 // POST /api/invoice/generate - Generate invoice with PDF automatically
@@ -425,19 +643,37 @@ router.post('/generate', async (req, res) => {
       });
     }
 
-    const { recipient, amount, description, dueDate, title } = value;
+    const { recipient, amount, description, dueDate, title, recipientName, recipientEmail, recipientAddress, tokenAddress } = value;
 
     console.log('📄 Generating invoice PDF automatically...');
 
-    // Prepare invoice data for PDF generation
+    // Prepare invoice data for PDF generation with normalized recipient data
     const invoiceData = {
-      recipient,
       amount,
       description,
       dueDate,
       createdAt: new Date().toISOString(),
-      title
+      title,
+      tokenAddress
     };
+
+    // Normalize recipient data
+    if (recipientName && recipientAddress) {
+      // New format with separate fields
+      invoiceData.recipient = recipientAddress;
+      invoiceData.recipientName = recipientName;
+      invoiceData.recipientEmail = recipientEmail || '';
+    } else if (recipient && typeof recipient === 'object') {
+      // Nested object format
+      invoiceData.recipient = recipient.walletAddress;
+      invoiceData.recipientName = recipient.name;
+      invoiceData.recipientEmail = recipient.email || '';
+    } else if (recipient && typeof recipient === 'string') {
+      // Old format - just the address
+      invoiceData.recipient = recipient;
+      invoiceData.recipientName = 'N/A';
+      invoiceData.recipientEmail = '';
+    }
 
     // Generate PDF using pdf-lib
     const pdfBytes = await pdfGenerator.generateInvoicePDF(invoiceData);
@@ -450,7 +686,9 @@ router.post('/generate', async (req, res) => {
       title: title || 'Blockchain Invoice',
       description: description,
       invoiceData: {
-        recipient,
+        recipient: invoiceData.recipient,
+        recipientName: invoiceData.recipientName,
+        recipientEmail: invoiceData.recipientEmail,
         amount,
         dueDate,
         createdAt: invoiceData.createdAt
@@ -459,6 +697,7 @@ router.post('/generate', async (req, res) => {
 
     // Upload PDF to IPFS (Pinata or local storage)
     let ipfsResult;
+    let useFallbackStorage = false;
 
     if (process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY) {
       console.log('📤 Uploading generated PDF to Pinata IPFS...');
@@ -501,9 +740,14 @@ router.post('/generate', async (req, res) => {
         console.log('✅ Generated PDF uploaded to Pinata IPFS:', response.data.IpfsHash);
       } catch (pinataError) {
         console.error('❌ Pinata upload failed:', pinataError.message);
-        throw pinataError;
+        console.log('📁 Falling back to local storage...');
+        // Use fallback instead of throwing
+        useFallbackStorage = true;
       }
-    } else {
+    } 
+    
+    // Either the Pinata keys aren't set or Pinata upload failed
+    if (!process.env.PINATA_API_KEY || !process.env.PINATA_SECRET_KEY || useFallbackStorage) {
       // Fallback to local storage
       console.log('📁 Saving generated PDF locally...');
       
@@ -583,10 +827,29 @@ router.post('/preview', async (req, res) => {
       });
     }
 
+    // Normalize the invoice data for PDF generation
     const invoiceData = {
       ...value,
       createdAt: new Date().toISOString()
     };
+
+    // Normalize recipient data for PDF generator
+    if (value.recipientName && value.recipientAddress) {
+      // New format with separate fields
+      invoiceData.recipient = value.recipientAddress;
+      invoiceData.recipientName = value.recipientName;
+      invoiceData.recipientEmail = value.recipientEmail || '';
+    } else if (value.recipient && typeof value.recipient === 'object') {
+      // Nested object format
+      invoiceData.recipient = value.recipient.walletAddress;
+      invoiceData.recipientName = value.recipient.name;
+      invoiceData.recipientEmail = value.recipient.email || '';
+    } else if (value.recipient && typeof value.recipient === 'string') {
+      // Old format - just the address
+      invoiceData.recipient = value.recipient;
+      invoiceData.recipientName = 'N/A';
+      invoiceData.recipientEmail = '';
+    }
 
     // Generate PDF
     const pdfBytes = await pdfGenerator.generateInvoicePDF(invoiceData);
@@ -604,6 +867,201 @@ router.post('/preview', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to generate PDF preview',
+      message: error.message
+    });
+  }
+});
+
+// User management endpoints
+
+// Get or create user profile
+router.post('/users/profile', async (req, res) => {
+  try {
+    const { error, value } = userSchema.validate(req.body);
+    
+    if (error) {
+      return res.status(400).json({
+        error: 'Validation error',
+        message: error.details[0].message
+      });
+    }
+
+    const user = await getOrCreateUser(value.walletAddress, value);
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        walletAddress: user.walletAddress,
+        name: user.name,
+        company: user.company,
+        email: user.email,
+        preferences: user.preferences,
+        stats: {
+          totalInvoices: user.stats.totalInvoices,
+          totalEarned: parseFloat(user.stats.totalEarned.toString()).toFixed(4),
+          totalPaid: parseFloat(user.stats.totalPaid.toString()).toFixed(4)
+        },
+        createdAt: user.createdAt,
+        lastActive: user.lastActive
+      }
+    });
+
+  } catch (error) {
+    console.error('User profile error:', error);
+    res.status(500).json({
+      error: 'Failed to get user profile',
+      message: error.message
+    });
+  }
+});
+
+// Update user preferences
+router.put('/users/:walletAddress/preferences', async (req, res) => {
+  try {
+    const { walletAddress } = req.params;
+    const { preferences } = req.body;
+
+    const user = await User.findByWallet(walletAddress);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No user found with this wallet address'
+      });
+    }
+
+    user.preferences = { ...user.preferences, ...preferences };
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Preferences updated successfully',
+      preferences: user.preferences
+    });
+
+  } catch (error) {
+    console.error('Update preferences error:', error);
+    res.status(500).json({
+      error: 'Failed to update preferences',
+      message: error.message
+    });
+  }
+});
+
+// Update invoice status
+router.put('/invoices/:invoiceId/status', async (req, res) => {
+  try {
+    const { invoiceId } = req.params;
+    const { status, transactionHash, blockNumber } = req.body;
+
+    const invoice = await Invoice.findOne({ invoiceId });
+    if (!invoice) {
+      return res.status(404).json({
+        error: 'Invoice not found',
+        message: 'No invoice found with this ID'
+      });
+    }
+
+    if (status === 'paid') {
+      await invoice.markAsPaid(transactionHash, blockNumber);
+    } else {
+      await invoice.updateStatus(status);
+    }
+
+    res.json({
+      success: true,
+      message: 'Invoice status updated successfully',
+      invoice: {
+        invoiceId: invoice.invoiceId,
+        status: invoice.status,
+        paidDate: invoice.paidDate,
+        transactionHash: invoice.blockchain.transactionHash
+      }
+    });
+
+  } catch (error) {
+    console.error('Update status error:', error);
+    res.status(500).json({
+      error: 'Failed to update invoice status',
+      message: error.message
+    });
+  }
+});
+
+// Get user dashboard analytics
+router.get('/users/:walletAddress/analytics', async (req, res) => {
+  try {
+    const { walletAddress } = req.params;
+    
+    const user = await User.findByWallet(walletAddress);
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+        message: 'No user found with this wallet address'
+      });
+    }
+
+    // Get invoice analytics
+    const [
+      totalInvoices,
+      paidInvoices,
+      pendingInvoices,
+      overdueInvoices,
+      totalEarned,
+      monthlyData
+    ] = await Promise.all([
+      Invoice.countDocuments({ userId: user._id }),
+      Invoice.countDocuments({ userId: user._id, status: 'paid' }),
+      Invoice.countDocuments({ userId: user._id, status: 'pending' }),
+      Invoice.countDocuments({ 
+        userId: user._id, 
+        status: 'pending',
+        dueDate: { $lt: new Date() }
+      }),
+      Invoice.aggregate([
+        { $match: { userId: user._id, status: 'paid' } },
+        { $group: { _id: null, total: { $sum: '$amount' } } }
+      ]),
+      Invoice.aggregate([
+        { $match: { userId: user._id } },
+        {
+          $group: {
+            _id: {
+              year: { $year: '$createdAt' },
+              month: { $month: '$createdAt' }
+            },
+            count: { $sum: 1 },
+            totalAmount: { $sum: '$amount' }
+          }
+        },
+        { $sort: { '_id.year': 1, '_id.month': 1 } },
+        { $limit: 12 }
+      ])
+    ]);
+
+    res.json({
+      success: true,
+      analytics: {
+        overview: {
+          totalInvoices,
+          paidInvoices,
+          pendingInvoices,
+          overdueInvoices,
+          totalEarned: totalEarned[0] ? parseFloat(totalEarned[0].total.toString()).toFixed(4) : '0.0000',
+          paymentRate: totalInvoices > 0 ? ((paidInvoices / totalInvoices) * 100).toFixed(1) : 0
+        },
+        monthlyData: monthlyData.map(item => ({
+          month: `${item._id.year}-${item._id.month.toString().padStart(2, '0')}`,
+          count: item.count,
+          totalAmount: parseFloat(item.totalAmount.toString()).toFixed(4)
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Analytics error:', error);
+    res.status(500).json({
+      error: 'Failed to get analytics',
       message: error.message
     });
   }

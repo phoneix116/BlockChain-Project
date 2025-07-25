@@ -35,7 +35,9 @@ const CreateInvoice = () => {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    recipient: '',
+    recipientName: '',
+    recipientEmail: '',
+    recipientAddress: '',
     amount: '',
     tokenAddress: '',
     dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
@@ -58,12 +60,15 @@ const CreateInvoice = () => {
       if (!formData.title.trim()) {
         newErrors.title = 'Title is required';
       }
-      if (!formData.recipient.trim()) {
-        newErrors.recipient = 'Recipient address is required';
-      } else if (!ethers.utils.isAddress(formData.recipient)) {
-        newErrors.recipient = 'Invalid Ethereum address';
-      } else if (formData.recipient.toLowerCase() === account?.toLowerCase()) {
-        newErrors.recipient = 'Cannot create invoice for yourself';
+      if (!formData.recipientName.trim()) {
+        newErrors.recipientName = 'Recipient name is required';
+      }
+      if (!formData.recipientAddress.trim()) {
+        newErrors.recipientAddress = 'Recipient address is required';
+      } else if (!ethers.utils.isAddress(formData.recipientAddress)) {
+        newErrors.recipientAddress = 'Invalid Ethereum address';
+      } else if (formData.recipientAddress.toLowerCase() === account?.toLowerCase()) {
+        newErrors.recipientAddress = 'Cannot create invoice for yourself';
       }
       if (!formData.amount || parseFloat(formData.amount) <= 0) {
         newErrors.amount = 'Amount must be greater than 0';
@@ -82,7 +87,24 @@ const CreateInvoice = () => {
 
     try {
       setGeneratingPDF(true);
-      const blob = await invoiceAPI.previewInvoicePDF(formData);
+      
+      // Structure the data for PDF preview
+      const pdfData = {
+        title: formData.title,
+        description: formData.description,
+        amount: formData.amount,
+        dueDate: formData.dueDate,
+        recipientName: formData.recipientName,
+        recipientEmail: formData.recipientEmail || '',
+        recipientAddress: formData.recipientAddress,
+        recipient: {
+          name: formData.recipientName,
+          email: formData.recipientEmail || '',
+          walletAddress: formData.recipientAddress
+        }
+      };
+      
+      const blob = await invoiceAPI.previewInvoicePDF(pdfData);
       setPdfBlob(blob);
       setActiveStep(1);
     } catch (error) {
@@ -107,35 +129,55 @@ const CreateInvoice = () => {
 
   const handleSubmit = async () => {
     try {
-      // Generate invoice with automatic PDF creation and IPFS upload
-      const result = await invoiceAPI.generateInvoice(formData);
+      // Structure the invoice data to match API expectations
+      const apiData = {
+        title: formData.title,
+        description: formData.description,
+        amount: formData.amount,
+        dueDate: formData.dueDate,
+        tokenAddress: formData.tokenAddress,
+        recipientName: formData.recipientName,
+        recipientEmail: formData.recipientEmail || '',
+        recipientAddress: formData.recipientAddress,
+        walletAddress: account, // Add user's wallet address
+        // Structure recipient as object for backend
+        recipient: {
+          name: formData.recipientName,
+          email: formData.recipientEmail || '',
+          walletAddress: formData.recipientAddress
+        }
+      };
+
+      // Call the InvoiceContext's createInvoice function which handles both MongoDB and blockchain
+      const result = await createInvoice(apiData);
       
-      console.log('Generated invoice result:', result);
-      
-      // Access IPFS hash from nested data structure
-      const ipfsHash = result.data?.ipfsHash || result.ipfsHash;
-      
-      if (!ipfsHash) {
-        throw new Error('No IPFS hash received from PDF generation');
+      // Handle partial success (metadata created but PDF failed)
+      if (result && !result.success && result.invoice) {
+        toast.warning(
+          <div>
+            <div>Invoice metadata created, but PDF upload failed</div>
+            <div>Invoice ID: {result.invoice.invoiceId}</div>
+            <div>Error: {result.error}</div>
+          </div>
+        );
+        
+        // Navigate to dashboard instead of invoice details since PDF isn't available
+        navigate('/dashboard');
+        return;
       }
       
-      // Use the generated IPFS hash to create the blockchain invoice
-      const invoiceData = {
-        ...formData,
-        ipfsHash: ipfsHash
-      };
-      
-      const blockchainResult = await createInvoice(invoiceData);
-      
-      toast.success(
-        <div>
-          <div>Invoice created successfully!</div>
-          <div>Invoice ID: {blockchainResult.invoiceId}</div>
-          <div>PDF stored on IPFS: {ipfsHash}</div>
-        </div>
-      );
-      
-      navigate(`/invoice/${blockchainResult.invoiceId}`);
+      // Handle full success
+      if (result && result.invoiceId) {
+        toast.success(
+          <div>
+            <div>Invoice created successfully!</div>
+            <div>Invoice ID: {result.invoiceId}</div>
+            {result.ipfsHash && <div>PDF stored on IPFS: {result.ipfsHash}</div>}
+          </div>
+        );
+        
+        navigate(`/invoice/${result.invoiceId}`);
+      }
     } catch (error) {
       console.error('Failed to create invoice:', error);
       toast.error('Failed to create invoice: ' + error.message);
@@ -248,14 +290,84 @@ const CreateInvoice = () => {
                 }}
               />
             </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Recipient Name"
+                value={formData.recipientName}
+                onChange={handleInputChange('recipientName')}
+                error={!!errors.recipientName}
+                helperText={errors.recipientName}
+                placeholder="e.g., John Doe"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                  '& .MuiFormHelperText-root': {
+                    color: '#ef4444',
+                  },
+                }}
+              />
+            </Grid>
+            <Grid item xs={12} sm={6}>
+              <TextField
+                fullWidth
+                label="Recipient Email (Optional)"
+                type="email"
+                value={formData.recipientEmail}
+                onChange={handleInputChange('recipientEmail')}
+                placeholder="recipient@example.com"
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    bgcolor: 'rgba(15, 23, 42, 0.8)',
+                    '& fieldset': {
+                      borderColor: 'rgba(148, 163, 184, 0.3)',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: 'rgba(59, 130, 246, 0.5)',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#3b82f6',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    color: '#94a3b8',
+                    '&.Mui-focused': {
+                      color: '#3b82f6',
+                    },
+                  },
+                  '& .MuiOutlinedInput-input': {
+                    color: '#f8fafc',
+                  },
+                }}
+              />
+            </Grid>
             <Grid item xs={12}>
               <TextField
                 fullWidth
-                label="Recipient Address"
-                value={formData.recipient}
-                onChange={handleInputChange('recipient')}
-                error={!!errors.recipient}
-                helperText={errors.recipient}
+                label="Recipient Wallet Address"
+                value={formData.recipientAddress}
+                onChange={handleInputChange('recipientAddress')}
+                error={!!errors.recipientAddress}
+                helperText={errors.recipientAddress}
                 placeholder="0x..."
                 sx={{
                   '& .MuiOutlinedInput-root': {
@@ -430,10 +542,30 @@ const CreateInvoice = () => {
 
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
-                    Recipient
+                    Recipient Name
+                  </Typography>
+                  <Typography variant="body1" sx={{ color: '#f8fafc', fontWeight: 500 }}>
+                    {formData.recipientName}
+                  </Typography>
+                </Box>
+
+                {formData.recipientEmail && (
+                  <Box sx={{ mb: 2 }}>
+                    <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                      Recipient Email
+                    </Typography>
+                    <Typography variant="body1" sx={{ color: '#f8fafc' }}>
+                      {formData.recipientEmail}
+                    </Typography>
+                  </Box>
+                )}
+
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="subtitle2" sx={{ color: '#94a3b8', mb: 1 }}>
+                    Recipient Address
                   </Typography>
                   <Typography variant="body1" sx={{ color: '#f8fafc', fontFamily: 'monospace' }}>
-                    {formData.recipient}
+                    {formData.recipientAddress}
                   </Typography>
                 </Box>
 

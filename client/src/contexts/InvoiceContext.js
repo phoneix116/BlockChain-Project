@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { ethers } from 'ethers';
 import { toast } from 'react-toastify';
 import { useWallet } from './WalletContext';
 import contractAPI from '../services/contractAPI';
-import ipfsAPI from '../services/ipfsAPI';
+import invoiceAPI from '../services/invoiceAPI';
 
 const InvoiceContext = createContext();
 
@@ -16,15 +16,15 @@ export const useInvoice = () => {
 };
 
 export const InvoiceProvider = ({ children }) => {
-  const { signer, account, provider } = useWallet();
-  const [invoices, setInvoices] = useState([]);
+  const { signer, account } = useWallet();
   const [userInvoices, setUserInvoices] = useState([]);
+  const [userInfo, setUserInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [contract, setContract] = useState(null);
   const [lastLoadTime, setLastLoadTime] = useState(0);
 
-  // Rate limiting: prevent API calls more frequent than once per 2 seconds
-  const MIN_LOAD_INTERVAL = 2000;
+  // Rate limiting: prevent API calls more frequent than once per 5 seconds
+  const MIN_LOAD_INTERVAL = 5000;
 
   // Load contract
   useEffect(() => {
@@ -47,8 +47,8 @@ export const InvoiceProvider = ({ children }) => {
     loadContract();
   }, [signer]);
 
-  // Load user invoices
-  const loadUserInvoices = async () => {
+  // Load user data and invoices from MongoDB
+  const loadUserInvoices = useCallback(async () => {
     if (!account) return;
 
     // Rate limiting: check if enough time has passed since last load
@@ -62,56 +62,68 @@ export const InvoiceProvider = ({ children }) => {
     setLastLoadTime(now);
     
     try {
-      const response = await contractAPI.getUserInvoices(account);
-      if (response.success) {
-        setUserInvoices(response.invoices || []);
+      // Load user info and invoices from MongoDB
+      const [userResponse, invoicesResponse] = await Promise.all([
+        invoiceAPI.createOrGetUser({ walletAddress: account }),
+        invoiceAPI.getUserInvoices(account)
+      ]);
+
+      if (userResponse.user) {
+        setUserInfo(userResponse.user);
+      }
+
+      if (invoicesResponse.results) {
+        setUserInvoices(invoicesResponse.results);
       } else {
-        // If no invoices found, set empty array instead of showing error
         setUserInvoices([]);
       }
     } catch (error) {
-      console.error('Failed to load user invoices:', error);
-      // Only show error for actual network/server failures, not empty results
-      if (error.code === 'NETWORK_ERROR' || error.message?.includes('Network Error')) {
-        // Only show one error notification at a time
-        if (!document.querySelector('.Toastify__toast--error')) {
-          toast.error('Failed to load invoices: Network error - please check your connection');
-        }
+      // Only log non-network errors to reduce console noise
+      if (!error.message?.includes('Network error') && !error.message?.includes('Rate limit')) {
+        console.error('Failed to load user data:', error.message);
+      }
+      
+      // Only show toast for meaningful errors, avoid duplicates
+      if (error.message?.includes('Network error')) {
+        // Don't show network error toasts as they're usually temporary
+      } else if (!document.querySelector('.Toastify__toast--error')) {
+        toast.error('Failed to load invoices: ' + error.message);
       }
       setUserInvoices([]);
     } finally {
       setLoading(false);
     }
-  };
+  }, [account, lastLoadTime]);
 
-  // Create invoice
+  // Create invoice with MongoDB and blockchain
   const createInvoice = async (invoiceData) => {
-    if (!contract || !signer) {
-      throw new Error('Contract not available');
+    if (!contract || !signer || !account) {
+      throw new Error('Contract or wallet not available');
     }
 
     try {
       setLoading(true);
 
-      let ipfsHash;
+      // Use the complete invoice creation workflow
+      const result = await invoiceAPI.createCompleteInvoice(
+        invoiceData, 
+        account, 
+        userInfo
+      );
 
-      // Check if IPFS hash is already provided (from auto-generated PDF)
-      if (invoiceData.ipfsHash) {
-        ipfsHash = invoiceData.ipfsHash;
-      } else if (invoiceData.file) {
-        // Legacy: upload file if provided
-        const uploadResponse = await ipfsAPI.uploadFile(
-          invoiceData.file,
-          invoiceData.title,
-          invoiceData.description
-        );
-
-        if (!uploadResponse.success) {
-          throw new Error('Failed to upload PDF to IPFS');
-        }
-        ipfsHash = uploadResponse.ipfsHash;
-      } else {
-        throw new Error('No PDF file or IPFS hash provided');
+      const { invoice, pdf, error } = result;
+      
+      // Handle partial success (metadata created but PDF upload failed)
+      if (error) {
+        // Store the invoice in our local state even if PDF failed
+        setUserInvoices(prev => [invoice, ...prev]);
+        toast.warning(error);
+        setLoading(false);
+        return { success: false, invoice, error };
+      }
+      
+      if (!pdf || !pdf.ipfsHash) {
+        throw new Error('Failed to upload PDF to IPFS');
       }
 
       // Convert due date to timestamp
@@ -119,7 +131,7 @@ export const InvoiceProvider = ({ children }) => {
 
       // Create invoice on blockchain
       const tx = await contract.createInvoice(
-        ipfsHash,
+        pdf.ipfsHash,
         invoiceData.recipient,
         ethers.utils.parseEther(invoiceData.amount.toString()),
         invoiceData.tokenAddress || ethers.constants.AddressZero,
@@ -132,7 +144,17 @@ export const InvoiceProvider = ({ children }) => {
 
       // Get the invoice ID from the event
       const event = receipt.events?.find(e => e.event === 'InvoiceCreated');
-      const invoiceId = event?.args?.id?.toString();
+      const blockchainInvoiceId = event?.args?.id?.toString();
+
+      // Update the invoice in MongoDB with blockchain transaction details
+      if (blockchainInvoiceId) {
+        await invoiceAPI.updateInvoice(invoice._id, {
+          blockchainId: blockchainInvoiceId,
+          transactionHash: receipt.transactionHash,
+          blockNumber: receipt.blockNumber,
+          status: 'pending'
+        });
+      }
 
       toast.success('Invoice created successfully!');
       
@@ -141,9 +163,10 @@ export const InvoiceProvider = ({ children }) => {
 
       return {
         success: true,
-        invoiceId,
+        invoiceId: blockchainInvoiceId,
+        mongoId: invoice._id,
         txHash: receipt.transactionHash,
-        ipfsHash
+        ipfsHash: pdf.ipfsHash
       };
     } catch (error) {
       console.error('Failed to create invoice:', error);
@@ -154,7 +177,7 @@ export const InvoiceProvider = ({ children }) => {
     }
   };
 
-  // Pay invoice with ETH
+  // Pay invoice with ETH (also update MongoDB status)
   const payInvoiceETH = async (invoiceId, amount) => {
     if (!contract || !signer) {
       throw new Error('Contract not available');
@@ -169,6 +192,22 @@ export const InvoiceProvider = ({ children }) => {
 
       toast.info('Payment submitted. Waiting for confirmation...');
       const receipt = await tx.wait();
+
+      // Update status in MongoDB
+      try {
+        // Find the invoice by blockchain ID and mark as paid
+        const invoices = await invoiceAPI.searchInvoices({ 
+          walletAddress: account, 
+          blockchainId: invoiceId 
+        });
+        
+        if (invoices.results && invoices.results.length > 0) {
+          await invoiceAPI.markInvoiceAsPaid(invoices.results[0]._id, receipt.transactionHash);
+        }
+      } catch (dbError) {
+        console.error('Failed to update invoice status in database:', dbError);
+        // Don't fail the entire operation for database update errors
+      }
 
       toast.success('Payment completed successfully!');
       
@@ -357,6 +396,79 @@ export const InvoiceProvider = ({ children }) => {
     return colorMap[status] || 'default';
   };
 
+  // MongoDB-specific methods
+  const searchInvoices = async (filters) => {
+    try {
+      setLoading(true);
+      const response = await invoiceAPI.searchInvoices({ 
+        walletAddress: account, 
+        ...filters 
+      });
+      return response.results || [];
+    } catch (error) {
+      console.error('Failed to search invoices:', error);
+      toast.error('Failed to search invoices');
+      return [];
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getDashboardData = async () => {
+    if (!account) return null;
+    
+    try {
+      setLoading(true);
+      return await invoiceAPI.getDashboardData(account);
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateUserInfo = async (updatedInfo) => {
+    try {
+      const response = await invoiceAPI.updateUserPreferences(account, updatedInfo);
+      if (response.user) {
+        setUserInfo(response.user);
+        toast.success('Profile updated successfully');
+      }
+      return response;
+    } catch (error) {
+      console.error('Failed to update user info:', error);
+      toast.error('Failed to update profile');
+      throw error;
+    }
+  };
+
+  const getInvoiceTemplates = async () => {
+    try {
+      const response = await invoiceAPI.getUserTemplates(account);
+      return response.templates || [];
+    } catch (error) {
+      console.error('Failed to load templates:', error);
+      return [];
+    }
+  };
+
+  const createInvoiceTemplate = async (templateData) => {
+    try {
+      const response = await invoiceAPI.createTemplate({
+        ...templateData,
+        walletAddress: account
+      });
+      toast.success('Template created successfully');
+      return response.template;
+    } catch (error) {
+      console.error('Failed to create template:', error);
+      toast.error('Failed to create template');
+      throw error;
+    }
+  };
+
   // Load invoices on account change (with debouncing)
   useEffect(() => {
     let timeoutId;
@@ -368,6 +480,7 @@ export const InvoiceProvider = ({ children }) => {
       }, 500);
     } else {
       setUserInvoices([]);
+      setUserInfo(null);
     }
 
     return () => {
@@ -375,11 +488,11 @@ export const InvoiceProvider = ({ children }) => {
         clearTimeout(timeoutId);
       }
     };
-  }, [account]);
+  }, [account]); // Removed loadUserInvoices to prevent infinite loop
 
   const value = {
-    invoices,
     userInvoices,
+    userInfo,
     loading,
     contract,
     createInvoice,
@@ -390,6 +503,11 @@ export const InvoiceProvider = ({ children }) => {
     getInvoiceDetails,
     getInvoicesByStatus,
     loadUserInvoices,
+    searchInvoices,
+    getDashboardData,
+    updateUserInfo,
+    getInvoiceTemplates,
+    createInvoiceTemplate,
     formatInvoiceStatus,
     getStatusColor,
   };
