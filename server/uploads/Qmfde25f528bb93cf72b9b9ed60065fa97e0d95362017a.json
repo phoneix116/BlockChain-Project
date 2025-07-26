@@ -1,0 +1,14 @@
+{
+  "filename": "invoice-1753439644990.pdf",
+  "title": "dev work ",
+  "description": "server maintainance",
+  "invoiceData": {
+    "recipient": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "amount": "1.23",
+    "dueDate": "2025-08-14T00:00:00.000Z",
+    "createdAt": "2025-07-25T10:34:04.980Z"
+  },
+  "ipfsHash": "Qmfde25f528bb93cf72b9b9ed60065fa97e0d95362017a",
+  "uploadedAt": "2025-07-25T10:34:04.993Z",
+  "generated": true
+}

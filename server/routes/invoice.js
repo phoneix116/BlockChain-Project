@@ -129,14 +129,16 @@ router.post('/metadata', async (req, res) => {
     user.stats.totalInvoices += 1;
     await user.save();
 
+    console.log('✅ Created invoice with ID:', invoice.invoiceId);
+
     res.json({
       success: true,
       message: 'Invoice metadata stored successfully',
       invoice: {
-        id: invoice._id,
+        _id: invoice._id,
         invoiceId: invoice.invoiceId,
         title: invoice.title,
-        amount: invoice.formattedAmount,
+        amount: parseFloat(invoice.amount.toString()),
         currency: invoice.currency,
         status: invoice.status,
         createdAt: invoice.createdAt
@@ -178,6 +180,7 @@ router.get('/metadata/:invoiceId', async (req, res) => {
     // Format response
     const formattedInvoice = {
       ...invoice,
+      amount: parseFloat(invoice.amount.toString()), // Convert Decimal128 to number
       formattedAmount: parseFloat(invoice.amount.toString()).toFixed(4),
       daysUntilDue: invoice.dueDate ? Math.ceil((new Date(invoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null,
       isOverdue: invoice.status === 'pending' && invoice.dueDate && new Date() > new Date(invoice.dueDate)
@@ -287,10 +290,18 @@ router.get('/search', async (req, res) => {
     // Format results
     const formattedInvoices = invoices.map(invoice => ({
       ...invoice,
+      amount: parseFloat(invoice.amount.toString()),
       formattedAmount: parseFloat(invoice.amount.toString()).toFixed(4),
       daysUntilDue: invoice.dueDate ? Math.ceil((new Date(invoice.dueDate) - new Date()) / (1000 * 60 * 60 * 24)) : null,
       isOverdue: invoice.status === 'pending' && invoice.dueDate && new Date() > new Date(invoice.dueDate)
     }));
+
+    console.log('🔍 Search API returning invoices:', formattedInvoices.map(inv => ({
+      _id: inv._id,
+      invoiceId: inv.invoiceId,
+      title: inv.title,
+      amount: inv.amount
+    })));
 
     res.json({
       success: true,
@@ -741,14 +752,21 @@ router.post('/generate', async (req, res) => {
           }
         );
 
-        ipfsResult = {
-          success: true,
-          ipfsHash: response.data.IpfsHash,
-          size: pdfBytes.length,
-          timestamp: new Date().toISOString()
-        };
+        // Check if response is successful
+        if (response.data && response.data.IpfsHash) {
+          ipfsResult = {
+            success: true,
+            ipfsHash: response.data.IpfsHash,
+            size: pdfBytes.length,
+            timestamp: new Date().toISOString()
+          };
 
-        console.log('✅ Generated PDF uploaded to Pinata IPFS:', response.data.IpfsHash);
+          console.log('✅ Generated PDF uploaded to Pinata IPFS:', response.data.IpfsHash);
+          console.log('📊 Pinata response:', JSON.stringify(response.data, null, 2));
+        } else {
+          console.error('❌ Pinata response missing IpfsHash:', response.data);
+          throw new Error('Invalid response from Pinata: missing IpfsHash');
+        }
       } catch (pinataError) {
         console.error('❌ Pinata upload failed:', pinataError.message);
         console.error('Error details:', pinataError.response?.data || 'No response data');
