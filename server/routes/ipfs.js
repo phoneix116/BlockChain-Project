@@ -56,6 +56,14 @@ async function uploadToPinata(fileBuffer, metadata) {
   formData.append('pinataOptions', pinataOptions);
 
   try {
+    // Extract form-data headers if the method exists
+    const formHeaders = {};
+    if (typeof formData.getHeaders === 'function') {
+      Object.assign(formHeaders, formData.getHeaders());
+    }
+    
+    console.log('🔑 Using Pinata with API Key:', process.env.PINATA_API_KEY.substring(0, 5) + '...');
+    
     const response = await axios.post(
       'https://api.pinata.cloud/pinning/pinFileToIPFS',
       formData,
@@ -65,7 +73,9 @@ async function uploadToPinata(fileBuffer, metadata) {
           'Content-Type': `multipart/form-data; boundary=${formData._boundary}`,
           'pinata_api_key': process.env.PINATA_API_KEY,
           'pinata_secret_api_key': process.env.PINATA_SECRET_KEY,
+          ...formHeaders
         },
+        timeout: 60000 // 60 second timeout
       }
     );
 
@@ -77,7 +87,11 @@ async function uploadToPinata(fileBuffer, metadata) {
     };
   } catch (error) {
     console.error('Pinata upload error:', error.response?.data || error.message);
-    throw new Error('Failed to upload to IPFS');
+    if (error.response) {
+      console.error('Status:', error.response.status);
+      console.error('Data:', JSON.stringify(error.response.data));
+    }
+    throw new Error('Failed to upload to IPFS: ' + (error.response?.data?.error || error.message));
   }
 }
 
@@ -200,13 +214,15 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       uploadedBy: req.ip // In production, use authenticated user ID
     };
 
-    // Try Pinata first, then Web3.Storage, finally mock IPFS for development
+// Try Pinata first, then Web3.Storage, finally mock IPFS for development
     let result;
+    const forceLocalStorage = false; // Set to true to bypass Pinata completely for testing
+    
     try {
-      if (process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY) {
+      if (!forceLocalStorage && process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY) {
         console.log('🔄 Uploading to Pinata IPFS...');
         result = await uploadToPinata(req.file.buffer, metadata);
-      } else if (process.env.WEB3_STORAGE_TOKEN) {
+      } else if (!forceLocalStorage && process.env.WEB3_STORAGE_TOKEN) {
         console.log('🔄 Uploading to Web3.Storage...');
         result = await uploadToWeb3Storage(req.file.buffer, metadata);
       } else {
@@ -217,7 +233,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       console.error('Primary IPFS upload failed:', uploadError.message);
       
       // Try fallback services
-      if (process.env.WEB3_STORAGE_TOKEN && !result) {
+      if (!forceLocalStorage && process.env.WEB3_STORAGE_TOKEN && !result) {
         try {
           console.log('🔄 Trying Web3.Storage fallback...');
           result = await uploadToWeb3Storage(req.file.buffer, metadata);

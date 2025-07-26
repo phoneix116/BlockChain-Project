@@ -698,9 +698,13 @@ router.post('/generate', async (req, res) => {
     // Upload PDF to IPFS (Pinata or local storage)
     let ipfsResult;
     let useFallbackStorage = false;
-
-    if (process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY) {
+    
+    // For testing: Force local storage by setting this to true
+    const forceLocalStorage = false; // Change to true to bypass Pinata completely
+    
+    if (!forceLocalStorage && process.env.PINATA_API_KEY && process.env.PINATA_SECRET_KEY) {
       console.log('📤 Uploading generated PDF to Pinata IPFS...');
+      console.log('🔑 Using Pinata API Key:', process.env.PINATA_API_KEY.substring(0, 5) + '...');
       
       const formData = new FormData();
       formData.append('file', Buffer.from(pdfBytes), {
@@ -717,6 +721,13 @@ router.post('/generate', async (req, res) => {
       formData.append('pinataOptions', JSON.stringify({ cidVersion: 0 }));
 
       try {
+        // Extract form-data headers
+        const formHeaders = {};
+        // Only extract headers if getHeaders method exists
+        if (typeof formData.getHeaders === 'function') {
+          Object.assign(formHeaders, formData.getHeaders());
+        }
+        
         const response = await axios.post(
           'https://api.pinata.cloud/pinning/pinFileToIPFS',
           formData,
@@ -724,9 +735,9 @@ router.post('/generate', async (req, res) => {
             headers: {
               'pinata_api_key': process.env.PINATA_API_KEY,
               'pinata_secret_api_key': process.env.PINATA_SECRET_KEY,
-              ...formData.getHeaders()
+              ...formHeaders
             },
-            timeout: 60000
+            timeout: 60000 // 60 second timeout
           }
         );
 
@@ -740,14 +751,21 @@ router.post('/generate', async (req, res) => {
         console.log('✅ Generated PDF uploaded to Pinata IPFS:', response.data.IpfsHash);
       } catch (pinataError) {
         console.error('❌ Pinata upload failed:', pinataError.message);
+        console.error('Error details:', pinataError.response?.data || 'No response data');
         console.log('📁 Falling back to local storage...');
         // Use fallback instead of throwing
         useFallbackStorage = true;
       }
-    } 
+    } else {
+      // If Pinata keys aren't set or we're forcing local storage
+      useFallbackStorage = true;
+      console.log('📝 Using local storage for PDF', 
+        forceLocalStorage ? '(forced)' : 
+        (!process.env.PINATA_API_KEY ? '(no API key)' : '(as configured)'));
+    }
     
-    // Either the Pinata keys aren't set or Pinata upload failed
-    if (!process.env.PINATA_API_KEY || !process.env.PINATA_SECRET_KEY || useFallbackStorage) {
+    // Use local storage if needed
+    if (useFallbackStorage) {
       // Fallback to local storage
       console.log('📁 Saving generated PDF locally...');
       
